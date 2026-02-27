@@ -1,19 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use serde_json::{Value, json};
+use serde_json::json;
 use tokio::sync::{Mutex, mpsc::{self, Receiver, Sender}};
-use crate::{services::{ChatHandler, OpenAIChatHandler}, types::{HandlerToLooperMessage, LooperToHandlerMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage}};
-
-
-#[derive(Debug)]
-pub enum LooperState {
-    Continue(String),
-    Done
-}
+use crate::{services::{ChatHandler, OpenAIChatHandler}, tools, types::{HandlerToLooperMessage, LooperToHandlerMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage}};
 
 pub struct Looper {
-    handler: OpenAIChatHandler,
+    handler: Box<dyn ChatHandler>,
     looper_interface_sender: Sender<LooperToInterfaceMessage>,
     handler_looper_receiver: Arc<Mutex<Receiver<HandlerToLooperMessage>>>,
 }
@@ -21,11 +14,17 @@ pub struct Looper {
 impl Looper {
     pub fn new(looper_interface_sender: Sender<LooperToInterfaceMessage>) -> Result<Self> {
         let (handler_looper_sender, handler_looper_receiver) = mpsc::channel(10000); // for handler to send messages to looper
-        let (_, looper_handler_receiver) = mpsc::channel(10000); // for looper to send messages to handler
         let handler_looper_receiver = Arc::new(Mutex::new(handler_looper_receiver));
 
         let system_message = get_system_message();
-        let handler = OpenAIChatHandler::new(handler_looper_sender, looper_handler_receiver, &system_message)?;
+
+        // TODO: Pass in a provider enum and dynamically create handler
+        // For now this is unneccessary as we only have 1 supported provider
+        let mut handler = Box::new(OpenAIChatHandler::new(handler_looper_sender, &system_message)?);
+
+        // get and set available tools
+        let tools = tools::get_tools();
+        handler.set_tools(tools);
 
         Ok(Looper { 
             handler,
@@ -48,10 +47,11 @@ impl Looper {
                         l_i_s.send(LooperToInterfaceMessage::ToolCall(tc.name.clone())).await.unwrap();
 
                         let response = match tc.name.as_ref() {
-                            "read_file" => read_file(&tc.args).await,
-                            "write_file" => write_file(&tc.args).await,
-                            "list_directory" => list_directory(&tc.args).await, "grep" => grep(&tc.args).await,
-                            "find_files" => find_files(&tc.args).await,
+                            "read_file" => tools::read_file::execute(&tc.args).await,
+                            "write_file" => tools::write_file::execute(&tc.args).await,
+                            "list_directory" => tools::list_directory::execute(&tc.args).await,
+                            "grep" => tools::grep::execute(&tc.args).await,
+                            "find_files" => tools::find_files::execute(&tc.args).await,
                             _ => json!({"error": format!("Unknown function: {}", tc.name)}),
                         };
                         
@@ -79,121 +79,6 @@ impl Looper {
     }
 }
 
-// async fn get_agent_loop_state(looper_state: Arc<Mutex<LooperState>>) -> serde_json::Value {
-//     let looper_state_lock = looper_state.lock().await;
-//
-//     match &*looper_state_lock {
-//         LooperState::Continue(c) => {
-//             json!({ "state": format!("Agent Loop State is 'continue' with value: '{}'", c) })
-//         },
-//         LooperState::Done => {
-//             json!({ "state": "Agent Loop State is 'done'" })
-//         },
-//         _ => json!({ "error": "Unsupported state type | Supported enum values: 'done' and 'continue'" })
-//     }
-//      
-// }
-
-// async fn set_agent_loop_state(args: &str, looper_state: Arc<Mutex<LooperState>>) -> serde_json::Value {
-//     let args: serde_json::Value = args.parse().unwrap_or(json!({}));
-//     let state = args["state"].as_str().unwrap_or("");
-//     let continue_reason = args["continue_reason"].as_str().unwrap_or("No continue reason provided");
-//     let mut looper_state_lock = looper_state.lock().await;
-//
-//     match state {
-//         "continue" => {
-//             *looper_state_lock = LooperState::Continue(continue_reason.to_string());
-//             json!({ "response": "Set looper state to Continue" })
-//         },
-//         "done" => {
-//             *looper_state_lock = LooperState::Done;
-//             json!({ "response": "Set looper state to Done" })
-//         },
-//         _ => json!({ "error": "Unsupported state type | Supported enum values: 'done' and 'continue'" })
-//     }
-//      
-// }
-
-async fn read_file(args: &Value) -> serde_json::Value {
-    let path = args["path"].as_str().unwrap_or("");
-    match tokio::fs::read_to_string(path).await {
-        Ok(content) => json!({ "path": path, "content": content }),
-        Err(e) => json!({ "error": format!("Failed to read {}: {}", path, e) }),
-    }
-}
-
-async fn write_file(args: &Value) -> serde_json::Value {
-    let path = args["path"].as_str().unwrap_or("");
-    let content = args["content"].as_str().unwrap_or("");
-    if let Some(parent) = std::path::Path::new(path).parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
-    }
-    match tokio::fs::write(path, content).await {
-        Ok(()) => json!({ "path": path, "bytes_written": content.len() }),
-        Err(e) => json!({ "error": format!("Failed to write {}: {}", path, e) }),
-    }
-}
-
-async fn list_directory(args: &Value) -> serde_json::Value {
-    let path = args["path"].as_str().unwrap_or(".");
-    match tokio::fs::read_dir(path).await {
-        Ok(mut entries) => {
-            let mut items = Vec::new();
-            while let Ok(Some(entry)) = entries.next_entry().await {
-                let name = entry.file_name().to_string_lossy().to_string();
-                let is_dir = entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false);
-                if is_dir {
-                    items.push(format!("{}/", name));
-                } else {
-                    items.push(name);
-                }
-            }
-            items.sort();
-            json!({ "path": path, "entries": items })
-        }
-        Err(e) => json!({ "error": format!("Failed to list {}: {}", path, e) }),
-    }
-}
-
-async fn grep(args: &Value) -> serde_json::Value {
-    let pattern = args["pattern"].as_str().unwrap_or("");
-    let path = args["path"].as_str().unwrap_or(".");
-    let output = tokio::process::Command::new("grep")
-        .args(["-rn", "--include=*", pattern, path])
-        .output()
-        .await;
-    match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let lines: Vec<&str> = stdout.lines().take(100).collect();
-            let truncated = stdout.lines().count() > 100;
-            json!({
-                "pattern": pattern,
-                "path": path,
-                "matches": lines,
-                "truncated": truncated
-            })
-        }
-        Err(e) => json!({ "error": format!("grep failed: {}", e) }),
-    }
-}
-
-async fn find_files(args: &Value) -> serde_json::Value {
-    let pattern = args["pattern"].as_str().unwrap_or("*");
-    let path = args["path"].as_str().unwrap_or(".");
-    let output = tokio::process::Command::new("find")
-        .args([path, "-path", pattern, "-type", "f"])
-        .output()
-        .await;
-    match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let files: Vec<&str> = stdout.lines().take(200).collect();
-            json!({ "pattern": pattern, "path": path, "files": files })
-        }
-        Err(e) => json!({ "error": format!("find failed: {}", e) }),
-    }
-}
 
 fn get_system_message() -> String {
     format!("you're a friendly assistant")
