@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -7,8 +5,8 @@ use async_openai::{
         ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
         ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageArgs,
         ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessageArgs, ChatCompletionTool,
-        ChatCompletionTools, CreateChatCompletionRequestArgs, FinishReason, FunctionObjectArgs,
+        ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessageArgs,
+        ChatCompletionTools, CreateChatCompletionRequestArgs, FinishReason,
         ReasoningEffort,
     },
 };
@@ -17,16 +15,14 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 
 use anyhow::Result;
-use futures::{StreamExt, future::join_all};
-use serde_json::{Value, json};
+use futures::StreamExt;
 use tokio::sync::{
-    Mutex,
-    mpsc::{Receiver, Sender},
+    mpsc::Sender,
     oneshot,
 };
 
 use crate::types::{
-    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToHandlerMessage, LooperTool,
+    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperTool,
 };
 
 #[async_trait]

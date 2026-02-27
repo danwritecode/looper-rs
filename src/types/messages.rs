@@ -19,13 +19,6 @@ pub struct HandlerToLooperToolCallRequest {
     pub tool_result_channel: Sender<LooperToHandlerToolCallResult>
 }
 
-
-/// Looper to Handler Messages
-#[derive(Debug)]
-pub enum LooperToHandlerMessage {
-    ToolCallResult(LooperToHandlerToolCallResult)
-}
-
 #[derive(Debug)]
 pub struct LooperToHandlerToolCallResult {
     pub id: String,

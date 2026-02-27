@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::json;
 use tokio::sync::{Mutex, mpsc::{self, Receiver, Sender}};
-use crate::{services::{ChatHandler, OpenAIChatHandler}, tools, types::{HandlerToLooperMessage, LooperToHandlerMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage}};
+use crate::{services::{ChatHandler, OpenAIChatHandler}, tools, types::{HandlerToLooperMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage}};
 
 pub struct Looper {
     handler: Box<dyn ChatHandler>,
