@@ -1,23 +1,24 @@
 use std::{error::Error, io::{self, Write}};
+
 use tokio::sync::mpsc;
 
-use crate::{looper::{Looper, LooperResponse}, services::OpenAIChatHandler};
+use crate::{looper::Looper, types::LooperToInterfaceMessage};
 
 mod looper;
 mod services;
+mod tools;
+mod types;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
     let (tx, mut rx) = mpsc::channel(10000);
-
-    let handler = Box::new(OpenAIChatHandler::new(tx)?);
-    let mut looper = Looper::new(handler);
+    let mut looper = Looper::new(tx);
 
     tokio::spawn(async move{
         while let Some(message) = rx.recv().await {
             match message {
-                LooperResponse::Assistant(m) => {
+                LooperToInterfaceMessage::Assistant(m) => {
                     if m == "<END>" {
                         println!("");
                     } else {
@@ -25,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         io::stdout().flush().ok();
                     }
                 },
-                LooperResponse::ToolCall(name) => {
+                LooperToInterfaceMessage::ToolCall(name) => {
                     println!("Calling: {}", name);
                 }
             }
