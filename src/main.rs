@@ -13,21 +13,20 @@ mod types;
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
     let (tx, mut rx) = mpsc::channel(10000);
-    let mut looper = Looper::new(tx);
+    let mut looper = Looper::new(tx)?;
 
     tokio::spawn(async move{
         while let Some(message) = rx.recv().await {
             match message {
                 LooperToInterfaceMessage::Assistant(m) => {
-                    if m == "<END>" {
-                        println!("");
-                    } else {
-                        print!("{}", m);
-                        io::stdout().flush().ok();
-                    }
+                    print!("{}", m);
+                    io::stdout().flush().ok();
                 },
                 LooperToInterfaceMessage::ToolCall(name) => {
                     println!("Calling: {}", name);
+                },
+                LooperToInterfaceMessage::TurnComplete => {
+                    println!("");
                 }
             }
         }
