@@ -227,7 +227,6 @@ impl OpenAIChatHandler {
 
         self.messages.push(message);
 
-
         let end_res = HandlerToLooperMessage::TurnComplete;
         self.sender.send(end_res).await?;
 

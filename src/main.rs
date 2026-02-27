@@ -1,5 +1,6 @@
-use std::{error::Error, io::{self, Write}};
+use std::{error::Error, io::{self, Write}, time::Duration};
 
+use indicatif::{ProgressBar, ProgressStyle};
 use tokio::sync::mpsc;
 
 use crate::{looper::Looper, types::LooperToInterfaceMessage};
@@ -16,14 +17,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut looper = Looper::new(tx)?;
 
     tokio::spawn(async move{
+        let mut spinner: Option<ProgressBar> = None;
+
         while let Some(message) = rx.recv().await {
+            if let Some(sp) = spinner.take() { sp.finish_and_clear(); }
+
             match message {
                 LooperToInterfaceMessage::Assistant(m) => {
                     print!("{}", m);
                     io::stdout().flush().ok();
                 },
                 LooperToInterfaceMessage::ToolCall(name) => {
-                    println!("Calling: {}", name);
+                    spinner = Some(tool_spinner(&name));
                 },
                 LooperToInterfaceMessage::TurnComplete => {
                     println!("");
@@ -38,4 +43,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         looper.send(&input).await?;
     }
+}
+
+
+fn tool_spinner(name: &str) -> ProgressBar {
+    let sp = ProgressBar::new_spinner();
+    sp.set_style(
+        ProgressStyle::default_spinner()
+            .tick_strings(&["▖", "▘", "▝", "▗", "▚", "▞", ""])
+    );
+    sp.set_message(name.to_string());
+    sp.enable_steady_tick(Duration::from_millis(80));
+    sp
 }

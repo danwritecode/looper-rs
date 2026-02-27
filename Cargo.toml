@@ -14,3 +14,4 @@ dotenv = "0.15.0"
 async-openai = { version = "0.33.0", features = ["chat-completion"]}
 async-trait = "0.1.89"
 async-recursion = "1.1.1"
+indicatif = "0.18.4"
