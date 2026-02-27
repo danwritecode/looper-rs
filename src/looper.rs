@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use serde_json::json;
 use tokio::sync::{Mutex, mpsc::{self, Receiver, Sender}};
 use crate::{services::{ChatHandler, OpenAIChatHandler}, tools::{self, LooperTools}, types::{HandlerToLooperMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage}};
 
@@ -9,6 +8,7 @@ pub struct Looper {
     handler: Box<dyn ChatHandler>,
     looper_interface_sender: Sender<LooperToInterfaceMessage>,
     handler_looper_receiver: Arc<Mutex<Receiver<HandlerToLooperMessage>>>,
+    tools: Arc<LooperTools>
 }
 
 impl Looper {
@@ -23,21 +23,22 @@ impl Looper {
         let mut handler = Box::new(OpenAIChatHandler::new(handler_looper_sender, &system_message)?);
 
         // get and set available tools
-        let tools = LooperTools::new().get_tools();
-        handler.set_tools(tools);
+        let tools = LooperTools::new();
+        handler.set_tools(tools.get_tools());
+        let tools = Arc::new(tools);
 
         Ok(Looper { 
             handler,
             looper_interface_sender,
-            handler_looper_receiver
+            handler_looper_receiver,
+            tools
         })
     }
 
     pub async fn send(&mut self, message: &str) -> Result<()> {
         let l_i_s = self.looper_interface_sender.clone();
         let h_l_r = self.handler_looper_receiver.clone();
-
-        let tools = LooperTools::new();
+        let tools = self.tools.clone();
 
         tokio::spawn(async move{
             let mut h_l_r = h_l_r.lock().await;

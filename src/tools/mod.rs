@@ -4,6 +4,8 @@ pub mod list_directory;
 pub mod grep;
 pub mod find_files;
 
+use std::collections::HashMap;
+
 pub use read_file::*;
 pub use write_file::*;
 pub use list_directory::*;
@@ -16,55 +18,39 @@ use serde_json::{Value, json};
 use crate::types::LooperToolDefinition;
 
 #[async_trait]
-pub trait LooperTool {
+pub trait LooperTool: Send + Sync {
     async fn execute(&self, args: &Value) -> Value;
     fn tool(&self) -> LooperToolDefinition;
 }
 
 pub struct LooperTools {
-    read_file: ReadFileTool,
-    write_file: WriteFileTool,
-    list_directory: ListDirectoryTool,
-    grep: GrepTool,
-    find_files: FindFilesTool
+    tools: HashMap<String, Box<dyn LooperTool>>
 }
 
 impl LooperTools {
     pub fn new() -> Self {
-        let read_file = ReadFileTool::default(); 
-        let write_file = WriteFileTool::default(); 
-        let list_directory = ListDirectoryTool::default(); 
-        let grep = GrepTool::default(); 
-        let find_files = FindFilesTool::default(); 
+        let mut tools: HashMap<String, Box<dyn LooperTool>> = HashMap::new();
+
+        tools.insert("read_file".to_string(), Box::new(ReadFileTool));
+        tools.insert("write_file".to_string(), Box::new(ReadFileTool));
+        tools.insert("list_directory".to_string(), Box::new(ReadFileTool));
+        tools.insert("grep".to_string(), Box::new(ReadFileTool));
+        tools.insert("find_files".to_string(), Box::new(ReadFileTool));
 
         LooperTools { 
-            read_file,
-            write_file,
-            list_directory,
-            grep,
-            find_files
+            tools
         }
     }
 
     pub fn get_tools(&self) -> Vec<LooperToolDefinition> {
-        vec![
-            self.read_file.tool(),
-            self.write_file.tool(),
-            self.list_directory.tool(),
-            self.grep.tool(),
-            self.find_files.tool(),
-        ]
+        self.tools.values().into_iter().map(|t| t.tool()).collect::<Vec<LooperToolDefinition>>()
     }
 
     pub async fn run_tool(&self, name: &str, args: Value) -> Value {
-        match name {
-            "read_file" => self.read_file.execute(&args).await,
-            "write_file" => self.write_file.execute(&args).await,
-            "list_directory" => self.list_directory.execute(&args).await,
-            "grep" => self.grep.execute(&args).await,
-            "find_files" => self.find_files.execute(&args).await,
-            _ => json!({"error": format!("Unknown function: {}", name)})
-        }
+        match self.tools.get(name) {
+            Some(tool) => tool.execute(&args).await,
+            None => json!({"error": format!("Unknown function: {}", name)})
+        } 
     }
 }
 
