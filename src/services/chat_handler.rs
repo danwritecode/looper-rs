@@ -22,13 +22,13 @@ use tokio::sync::{
 };
 
 use crate::types::{
-    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperTool,
+    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition,
 };
 
 #[async_trait]
 pub trait ChatHandler {
     async fn send_message(&mut self, message: &str) -> Result<()>;
-    fn set_tools(&mut self, tools: Vec<LooperTool>);
+    fn set_tools(&mut self, tools: Vec<LooperToolDefinition>);
 }
 
 pub struct OpenAIChatHandler {
@@ -222,7 +222,7 @@ impl ChatHandler for OpenAIChatHandler {
         Ok(())
     }
 
-    fn set_tools(&mut self, tools: Vec<LooperTool>) {
+    fn set_tools(&mut self, tools: Vec<LooperToolDefinition>) {
         let tools = tools
             .into_iter()
             .map(|t| ChatCompletionTools::Function(t.into()))

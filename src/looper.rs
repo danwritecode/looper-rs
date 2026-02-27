@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::json;
 use tokio::sync::{Mutex, mpsc::{self, Receiver, Sender}};
-use crate::{services::{ChatHandler, OpenAIChatHandler}, tools, types::{HandlerToLooperMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage}};
+use crate::{services::{ChatHandler, OpenAIChatHandler}, tools::{self, LooperTools}, types::{HandlerToLooperMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage}};
 
 pub struct Looper {
     handler: Box<dyn ChatHandler>,
@@ -23,7 +23,7 @@ impl Looper {
         let mut handler = Box::new(OpenAIChatHandler::new(handler_looper_sender, &system_message)?);
 
         // get and set available tools
-        let tools = tools::get_tools();
+        let tools = LooperTools::new().get_tools();
         handler.set_tools(tools);
 
         Ok(Looper { 
@@ -37,6 +37,8 @@ impl Looper {
         let l_i_s = self.looper_interface_sender.clone();
         let h_l_r = self.handler_looper_receiver.clone();
 
+        let tools = LooperTools::new();
+
         tokio::spawn(async move{
             let mut h_l_r = h_l_r.lock().await;
             while let Some(message) = h_l_r.recv().await { match message { 
@@ -46,14 +48,7 @@ impl Looper {
                     HandlerToLooperMessage::ToolCallRequest(tc) => {
                         l_i_s.send(LooperToInterfaceMessage::ToolCall(tc.name.clone())).await.unwrap();
 
-                        let response = match tc.name.as_ref() {
-                            "read_file" => tools::read_file::execute(&tc.args).await,
-                            "write_file" => tools::write_file::execute(&tc.args).await,
-                            "list_directory" => tools::list_directory::execute(&tc.args).await,
-                            "grep" => tools::grep::execute(&tc.args).await,
-                            "find_files" => tools::find_files::execute(&tc.args).await,
-                            _ => json!({"error": format!("Unknown function: {}", tc.name)}),
-                        };
+                        let response = tools.run_tool(&tc.name, tc.args).await;
                         
                         let tc_result = LooperToHandlerToolCallResult {
                             id: tc.id,

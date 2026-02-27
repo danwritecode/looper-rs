@@ -25,7 +25,6 @@ pub struct LooperToHandlerToolCallResult {
     pub value: Value
 }
 
-
 #[derive(Debug)]
 pub enum LooperToInterfaceMessage {
     Assistant(Message),

@@ -1,19 +1,19 @@
 use async_openai::types::chat::{ChatCompletionTool, FunctionObjectArgs};
 use serde_json::{Value, json};
 
-pub struct LooperTool {
+pub struct LooperToolDefinition {
     name: String,
     description: String,
     parameters: Value
 }
 
-impl Default for LooperTool {
+impl Default for LooperToolDefinition {
     fn default() -> Self {
-        LooperTool { name: "".to_string(), description: "".to_string(), parameters: json!({}) }
+        LooperToolDefinition { name: "".to_string(), description: "".to_string(), parameters: json!({}) }
     }
 }
 
-impl LooperTool {
+impl LooperToolDefinition {
     pub fn name(mut self, name: &str) -> Self {
         self.name = name.to_string();
         self
@@ -32,8 +32,8 @@ impl LooperTool {
 
 // TODO: As this expands, separate these into separate tool files and separate mapping files.
 
-impl From<LooperTool> for ChatCompletionTool {
-    fn from(value: LooperTool) -> Self {
+impl From<LooperToolDefinition> for ChatCompletionTool {
+    fn from(value: LooperToolDefinition) -> Self {
         ChatCompletionTool {
             function: FunctionObjectArgs::default()
                 .name(value.name)
