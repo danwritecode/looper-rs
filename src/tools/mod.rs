@@ -1,3 +1,4 @@
+pub mod set_agent_loop_state;
 pub mod read_file;
 pub mod write_file;
 pub mod list_directory;
@@ -6,6 +7,7 @@ pub mod find_files;
 
 use std::collections::HashMap;
 
+pub use set_agent_loop_state::*;
 pub use read_file::*;
 pub use write_file::*;
 pub use list_directory::*;
@@ -36,6 +38,7 @@ impl LooperTools {
         tools.insert("list_directory".to_string(), Box::new(ListDirectoryTool));
         tools.insert("grep".to_string(), Box::new(GrepTool));
         tools.insert("find_files".to_string(), Box::new(FindFilesTool));
+        tools.insert("set_agent_loop_state".to_string(), Box::new(SetAgentLoopStateTool));
 
         LooperTools { 
             tools

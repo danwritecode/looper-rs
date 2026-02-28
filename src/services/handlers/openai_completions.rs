@@ -29,7 +29,8 @@ pub struct OpenAIChatHandler {
     client: Client<OpenAIConfig>,
     messages: Vec<ChatCompletionRequestMessage>,
     sender: Sender<HandlerToLooperMessage>,
-    tools: Vec<ChatCompletionTools>
+    tools: Vec<ChatCompletionTools>,
+    loop_continue: bool
 }
 
 impl OpenAIChatHandler {
@@ -50,7 +51,8 @@ impl OpenAIChatHandler {
             client,
             messages,
             sender,
-            tools
+            tools,
+            loop_continue: true
         })
     }
 
@@ -223,5 +225,9 @@ impl ChatHandler for OpenAIChatHandler {
             .collect::<Vec<ChatCompletionTools>>();
 
         self.tools = tools;
+    }
+
+    fn set_continue(&mut self) {
+        self.loop_continue = true;
     }
 }

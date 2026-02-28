@@ -11,11 +11,11 @@ use async_trait::async_trait;
 
 use anyhow::Result;
 use futures::StreamExt;
+use serde_json::Value;
 use tokio::sync::{mpsc::Sender, oneshot};
 
 use crate::{
-    services::ChatHandler,
-    types::{HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition},
+    looper::AgentLoopState, services::ChatHandler, types::{HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition}
 };
 
 pub struct OpenAIResponsesHandler {
@@ -24,6 +24,7 @@ pub struct OpenAIResponsesHandler {
     sender: Sender<HandlerToLooperMessage>,
     tools: Vec<Tool>,
     instructions: String,
+    loop_state: AgentLoopState
 }
 
 impl OpenAIResponsesHandler {
@@ -36,21 +37,37 @@ impl OpenAIResponsesHandler {
             sender,
             tools: Vec::new(),
             instructions: system_message.to_string(),
+            loop_state: AgentLoopState::Continue("".to_string())
         })
     }
 
     #[async_recursion]
-    async fn inner_send_message(&mut self, input: InputParam) -> Result<String> {
+    async fn inner_send_message(&mut self, input: Option<InputParam>) -> Result<String> {
         let mut builder = CreateResponseArgs::default();
-        builder
-            .model("gpt-5.2")
-            .input(input)
-            .tools(self.tools.clone())
-            .reasoning(Reasoning {
-                  effort: Some(ReasoningEffort::High),
-                  summary: Some(ReasoningSummary::Concise),
-              })
-            .instructions(self.instructions.clone());
+        match input {
+            Some(i) => {
+                builder
+                    .model("gpt-5.2")
+                    .input(i)
+                    .tools(self.tools.clone())
+                    .reasoning(Reasoning {
+                          effort: Some(ReasoningEffort::High),
+                          summary: Some(ReasoningSummary::Concise),
+                      })
+                    .instructions(self.instructions.clone());
+
+            },
+            None => {
+                builder
+                    .model("gpt-5.2")
+                    .tools(self.tools.clone())
+                    .reasoning(Reasoning {
+                          effort: Some(ReasoningEffort::High),
+                          summary: Some(ReasoningSummary::Concise),
+                      })
+                    .instructions(self.instructions.clone());
+            }
+        }
 
         if let Some(ref prev_id) = self.previous_response_id {
             builder.previous_response_id(prev_id);
@@ -90,11 +107,14 @@ impl OpenAIResponsesHandler {
                 Ok(ResponseStreamEvent::ResponseOutputItemDone(item_done)) => {
                     if let OutputItem::FunctionCall(fc) = item_done.item {
                         let (tx, rx) = oneshot::channel();
+                        let args = serde_json::from_str(&fc.arguments)?;
+
+                        self.handle_agent_loop_state(&fc.name, &args);
 
                         let tcr = HandlerToLooperToolCallRequest {
                             id: fc.call_id.clone(),
                             name: fc.name.clone(),
-                            args: serde_json::from_str(&fc.arguments)?,
+                            args,
                             tool_result_channel: tx,
                         };
 
@@ -147,18 +167,44 @@ impl OpenAIResponsesHandler {
                 })
                 .collect();
 
-            return self.inner_send_message(InputParam::Items(input_items)).await;
+            return self.inner_send_message(Some(InputParam::Items(input_items))).await;
         }
 
         Ok(assistant_res_buf.join(""))
     }
+
+    fn handle_agent_loop_state(&mut self, name: &str, args: &Value) {
+        if name != "set_agent_loop_state" { return; }
+
+        match args.get("state") {
+            Some(s) => {
+                if s == "done" {
+                    self.loop_state = AgentLoopState::Done; 
+                }
+            },
+            None => {
+                // If the model responds with a state that isn't supported
+                // we should just end to avoid infinite loop
+                self.loop_state = AgentLoopState::Done; 
+            }
+        }
+
+    }
+
 }
 
 #[async_trait]
 impl ChatHandler for OpenAIResponsesHandler {
     async fn send_message(&mut self, message: &str) -> Result<()> {
+        // reset loop state to continue on each message send
+        self.loop_state = AgentLoopState::Continue("".to_string());
+
         let input = InputParam::Text(message.to_string());
-        self.inner_send_message(input).await?;
+        self.inner_send_message(Some(input)).await?;
+
+        while let AgentLoopState::Continue(_) = &self.loop_state {
+            self.inner_send_message(None).await?;
+        }
 
         self.sender
             .send(HandlerToLooperMessage::TurnComplete)
@@ -172,5 +218,9 @@ impl ChatHandler for OpenAIResponsesHandler {
             .into_iter()
             .map(|t| Tool::Function(t.into()))
             .collect();
+    }
+
+    fn set_continue(&mut self) {
+        self.loop_state = AgentLoopState::Continue("".to_string());
     }
 }

@@ -714,6 +714,7 @@ dependencies = [
  "async-openai",
  "async-recursion",
  "async-trait",
+ "console",
  "dotenv",
  "futures",
  "indicatif",

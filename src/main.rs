@@ -1,13 +1,14 @@
-use std::{error::Error, io::{self, Write}, time::Duration};
+use std::{error::Error, io::{self, Write}, sync::Arc};
 
-use indicatif::{ProgressBar, ProgressStyle};
-use tokio::sync::mpsc;
+use indicatif::ProgressBar;
+use tokio::sync::{Notify, mpsc};
 
-use crate::{looper::Looper, types::LooperToInterfaceMessage};
+use crate::{looper::Looper, theme::Theme, types::LooperToInterfaceMessage};
 
 mod looper;
 mod mapping;
 mod services;
+mod theme;
 mod tools;
 mod types;
 
@@ -16,9 +17,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
     let (tx, mut rx) = mpsc::channel(10000);
     let mut looper = Looper::new(tx)?;
+    let turn_done = Arc::new(Notify::new());
+    let turn_done_tx = turn_done.clone();
 
     tokio::spawn(async move{
+        let theme = Theme::default();
         let mut spinner: Option<ProgressBar> = None;
+        let mut thinking_buf = String::new();
 
         while let Some(message) = rx.recv().await {
             if let Some(sp) = spinner.take() { sp.finish_and_clear(); }
@@ -29,39 +34,37 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     io::stdout().flush().ok();
                 },
                 LooperToInterfaceMessage::Thinking(m) => {
-                    // spinner = Some(tool_spinner(&m));
-                    print!("{}", m);
-                    io::stdout().flush().ok();
+                    if thinking_buf.is_empty() {
+                        spinner = Some(theme.thinking_spinner());
+                    }
+                    thinking_buf.push_str(&m);
                 },
                 LooperToInterfaceMessage::ThinkingComplete => {
-                    println!("");
+                    if !thinking_buf.is_empty() {
+                        println!("{}", theme.thinking.apply_to(&thinking_buf));
+                        thinking_buf.clear();
+                    }
                 },
                 LooperToInterfaceMessage::ToolCall(name) => {
-                    spinner = Some(tool_spinner(&name));
+                    spinner = Some(theme.tool_spinner(&name));
                 },
                 LooperToInterfaceMessage::TurnComplete => {
-                    println!("");
+                    println!("\n{}", theme.separator_line());
+                    turn_done_tx.notify_one();
                 }
             }
         }
     });
 
+    let theme = Theme::default();
     loop {
+        print!("{}", theme.prompt());
+        io::stdout().flush()?;
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
 
         looper.send(&input).await?;
+        turn_done.notified().await;
     }
-}
-
-
-fn tool_spinner(name: &str) -> ProgressBar {
-    let sp = ProgressBar::new_spinner();
-    sp.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["▖", "▘", "▝", "▗", "▚", "▞", ""])
-    );
-    sp.set_message(name.to_string());
-    sp.enable_steady_tick(Duration::from_millis(80));
-    sp
 }
