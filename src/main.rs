@@ -29,7 +29,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     io::stdout().flush().ok();
                 },
                 LooperToInterfaceMessage::Thinking(m) => {
-                    spinner = Some(tool_spinner(&m));
+                    // spinner = Some(tool_spinner(&m));
+                    print!("{}", m);
+                    io::stdout().flush().ok();
+                },
+                LooperToInterfaceMessage::ThinkingComplete => {
+                    println!("");
                 },
                 LooperToInterfaceMessage::ToolCall(name) => {
                     spinner = Some(tool_spinner(&name));

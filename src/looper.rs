@@ -66,6 +66,12 @@ impl Looper {
                             .await
                             .unwrap();
                     }
+                    HandlerToLooperMessage::ThinkingComplete => {
+                        l_i_s
+                            .send(LooperToInterfaceMessage::ThinkingComplete)
+                            .await
+                            .unwrap();
+                    }
                     HandlerToLooperMessage::ToolCallRequest(tc) => {
                         l_i_s
                             .send(LooperToInterfaceMessage::ToolCall(tc.name.clone()))
@@ -92,11 +98,6 @@ impl Looper {
         });
 
         self.handler.send_message(message).await?;
-
-        // agent loop TODO
-        // loop {
-        //
-        // }
 
         Ok(())
     }

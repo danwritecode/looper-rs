@@ -2,9 +2,7 @@ use async_openai::{
     Client,
     config::OpenAIConfig,
     types::{chat::ReasoningEffort, responses::{
-        CreateResponseArgs, FunctionCallOutput, FunctionCallOutputItemParam,
-        FunctionToolCall, InputItem, InputParam, Item, OutputItem,
-        ResponseStreamEvent, Tool,
+        CreateResponseArgs, FunctionCallOutput, FunctionCallOutputItemParam, FunctionToolCall, InputItem, InputParam, Item, OutputItem, Reasoning, ReasoningSummary, ResponseStreamEvent, Tool
     }},
 };
 
@@ -48,7 +46,10 @@ impl OpenAIResponsesHandler {
             .model("gpt-5.2")
             .input(input)
             .tools(self.tools.clone())
-            .reasoning(ReasoningEffort::High)
+            .reasoning(Reasoning {
+                  effort: Some(ReasoningEffort::High),
+                  summary: Some(ReasoningSummary::Concise),
+              })
             .instructions(self.instructions.clone());
 
         if let Some(ref prev_id) = self.previous_response_id {
@@ -74,10 +75,15 @@ impl OpenAIResponsesHandler {
                         .unwrap();
                 }
                 Ok(ResponseStreamEvent::ResponseReasoningSummaryTextDelta(delta)) => {
-                    println!("Thinking token: {:?}", delta.delta);
                     let text = delta.delta.clone();
                     self.sender
                         .send(HandlerToLooperMessage::Thinking(text))
+                        .await
+                        .unwrap();
+                }
+                Ok(ResponseStreamEvent::ResponseReasoningSummaryTextDone(_)) => {
+                    self.sender
+                        .send(HandlerToLooperMessage::ThinkingComplete)
                         .await
                         .unwrap();
                 }
