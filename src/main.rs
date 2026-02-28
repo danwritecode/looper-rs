@@ -1,5 +1,6 @@
 use std::{error::Error, io::{self, Write}, sync::Arc};
 
+use console::Term;
 use indicatif::ProgressBar;
 use tokio::sync::{Notify, mpsc};
 
@@ -15,6 +16,10 @@ mod types;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
+    let term = Term::stdout();
+    term.clear_screen()?;
+    let theme = Theme::default();
+    println!("{}", theme.greeting());
     let (tx, mut rx) = mpsc::channel(10000);
     let mut looper = Looper::new(tx)?;
     let turn_done = Arc::new(Notify::new());
@@ -56,7 +61,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    let theme = Theme::default();
     loop {
         print!("{}", theme.prompt());
         io::stdout().flush()?;

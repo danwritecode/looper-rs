@@ -8,6 +8,7 @@ pub struct Theme {
     pub separator: Style,
     pub tool_spinner: Style,
     pub prompt: Style,
+    pub greeting: Style,
 }
 
 impl Theme {
@@ -17,7 +18,12 @@ impl Theme {
             separator: Style::new().green().dim(),
             tool_spinner: Style::new().yellow(),
             prompt: Style::new().green().bold(),
+            greeting: Style::new().green().bold(),
         }
+    }
+
+    pub fn greeting(&self) -> String {
+        format!("{}\n", self.greeting.apply_to("\u{1F980} Welcome to Looper.rs"))
     }
 
     pub fn prompt(&self) -> String {
