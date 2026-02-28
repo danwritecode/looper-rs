@@ -10,9 +10,9 @@ pub struct GrepTool;
 impl LooperTool for GrepTool {
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
-            .name("grep")
-            .description("Search for a regex pattern in files. Recursively searches the given path and returns matching lines with file paths and line numbers.")
-            .paramters(json!({
+            .set_name("grep")
+            .set_description("Search for a regex pattern in files. Recursively searches the given path and returns matching lines with file paths and line numbers.")
+            .set_paramters(json!({
                 "type": "object",
                 "properties": {
                     "pattern": { "type": "string", "description": "The regex pattern to search for" },

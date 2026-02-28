@@ -10,9 +10,9 @@ pub struct ReadFileTool;
 impl LooperTool for ReadFileTool {
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
-            .name("read_file")
-            .description("Read the contents of a file at a given path. Returns the file contents as a string.")
-            .paramters(json!({
+            .set_name("read_file")
+            .set_description("Read the contents of a file at a given path. Returns the file contents as a string.")
+            .set_paramters(json!({
                 "type": "object",
                 "properties": {
                     "path": { "type": "string", "description": "The file path to read (absolute or relative to cwd)" }

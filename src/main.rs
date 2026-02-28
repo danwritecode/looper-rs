@@ -6,6 +6,7 @@ use tokio::sync::mpsc;
 use crate::{looper::Looper, types::LooperToInterfaceMessage};
 
 mod looper;
+mod mapping;
 mod services;
 mod tools;
 mod types;
@@ -26,6 +27,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 LooperToInterfaceMessage::Assistant(m) => {
                     print!("{}", m);
                     io::stdout().flush().ok();
+                },
+                LooperToInterfaceMessage::Thinking(m) => {
+                    spinner = Some(tool_spinner(&m));
                 },
                 LooperToInterfaceMessage::ToolCall(name) => {
                     spinner = Some(tool_spinner(&name));

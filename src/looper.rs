@@ -1,14 +1,21 @@
 use std::sync::Arc;
 
+use crate::{
+    services::{ChatHandler, openai_responses::OpenAIResponsesHandler},
+    tools::LooperTools,
+    types::{HandlerToLooperMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage},
+};
 use anyhow::Result;
-use tokio::sync::{Mutex, mpsc::{self, Receiver, Sender}};
-use crate::{services::{ChatHandler, OpenAIChatHandler}, tools::{self, LooperTools}, types::{HandlerToLooperMessage, LooperToHandlerToolCallResult, LooperToInterfaceMessage}};
+use tokio::sync::{
+    Mutex,
+    mpsc::{self, Receiver, Sender},
+};
 
 pub struct Looper {
     handler: Box<dyn ChatHandler>,
     looper_interface_sender: Sender<LooperToInterfaceMessage>,
     handler_looper_receiver: Arc<Mutex<Receiver<HandlerToLooperMessage>>>,
-    tools: Arc<LooperTools>
+    tools: Arc<LooperTools>,
 }
 
 impl Looper {
@@ -20,18 +27,21 @@ impl Looper {
 
         // TODO: Pass in a provider enum and dynamically create handler
         // For now this is unneccessary as we only have 1 supported provider
-        let mut handler = Box::new(OpenAIChatHandler::new(handler_looper_sender, &system_message)?);
+        let mut handler = Box::new(OpenAIResponsesHandler::new(
+            handler_looper_sender,
+            &system_message,
+        )?);
 
         // get and set available tools
         let tools = LooperTools::new();
         handler.set_tools(tools.get_tools());
         let tools = Arc::new(tools);
 
-        Ok(Looper { 
+        Ok(Looper {
             handler,
             looper_interface_sender,
             handler_looper_receiver,
-            tools
+            tools,
         })
     }
 
@@ -40,26 +50,42 @@ impl Looper {
         let h_l_r = self.handler_looper_receiver.clone();
         let tools = self.tools.clone();
 
-        tokio::spawn(async move{
+        tokio::spawn(async move {
             let mut h_l_r = h_l_r.lock().await;
-            while let Some(message) = h_l_r.recv().await { match message { 
+            while let Some(message) = h_l_r.recv().await {
+                match message {
                     HandlerToLooperMessage::Assistant(m) => {
-                        l_i_s.send(LooperToInterfaceMessage::Assistant(m)).await.unwrap();
-                    },
+                        l_i_s
+                            .send(LooperToInterfaceMessage::Assistant(m))
+                            .await
+                            .unwrap();
+                    }
+                    HandlerToLooperMessage::Thinking(m) => {
+                        l_i_s
+                            .send(LooperToInterfaceMessage::Thinking(m))
+                            .await
+                            .unwrap();
+                    }
                     HandlerToLooperMessage::ToolCallRequest(tc) => {
-                        l_i_s.send(LooperToInterfaceMessage::ToolCall(tc.name.clone())).await.unwrap();
+                        l_i_s
+                            .send(LooperToInterfaceMessage::ToolCall(tc.name.clone()))
+                            .await
+                            .unwrap();
 
                         let response = tools.run_tool(&tc.name, tc.args).await;
-                        
+
                         let tc_result = LooperToHandlerToolCallResult {
                             id: tc.id,
-                            value: response
+                            value: response,
                         };
 
                         tc.tool_result_channel.send(tc_result).unwrap();
-                    },
+                    }
                     HandlerToLooperMessage::TurnComplete => {
-                        l_i_s.send(LooperToInterfaceMessage::TurnComplete).await.unwrap();
+                        l_i_s
+                            .send(LooperToInterfaceMessage::TurnComplete)
+                            .await
+                            .unwrap();
                     }
                 }
             }
@@ -69,15 +95,15 @@ impl Looper {
 
         // agent loop TODO
         // loop {
+        //
         // }
 
         Ok(())
     }
 }
 
-
 fn get_system_message() -> String {
-    format!("you're a friendly assistant")
+    format!("You think deeply about everything before replying.")
 }
 
 // fn get_system_message() -> String {

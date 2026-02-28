@@ -32,10 +32,10 @@ impl LooperTools {
         let mut tools: HashMap<String, Box<dyn LooperTool>> = HashMap::new();
 
         tools.insert("read_file".to_string(), Box::new(ReadFileTool));
-        tools.insert("write_file".to_string(), Box::new(ReadFileTool));
-        tools.insert("list_directory".to_string(), Box::new(ReadFileTool));
-        tools.insert("grep".to_string(), Box::new(ReadFileTool));
-        tools.insert("find_files".to_string(), Box::new(ReadFileTool));
+        tools.insert("write_file".to_string(), Box::new(WriteFileTool));
+        tools.insert("list_directory".to_string(), Box::new(ListDirectoryTool));
+        tools.insert("grep".to_string(), Box::new(GrepTool));
+        tools.insert("find_files".to_string(), Box::new(FindFilesTool));
 
         LooperTools { 
             tools

@@ -7,6 +7,7 @@ type Message = String;
 #[derive(Debug)]
 pub enum HandlerToLooperMessage {
     Assistant(Message),
+    Thinking(Message),
     ToolCallRequest(HandlerToLooperToolCallRequest),
     TurnComplete
 }
@@ -28,6 +29,7 @@ pub struct LooperToHandlerToolCallResult {
 #[derive(Debug)]
 pub enum LooperToInterfaceMessage {
     Assistant(Message),
+    Thinking(Message),
     ToolCall(Name),
     TurnComplete
 }

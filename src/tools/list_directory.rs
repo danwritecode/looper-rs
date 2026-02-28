@@ -10,9 +10,9 @@ pub struct ListDirectoryTool;
 impl LooperTool for ListDirectoryTool {
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
-            .name("list_directory")
-            .description("List files and directories at the given path. Returns names with '/' suffix for directories.")
-            .paramters(json!({
+            .set_name("list_directory")
+            .set_description("List files and directories at the given path. Returns names with '/' suffix for directories.")
+            .set_paramters(json!({
                 "type": "object",
                 "properties": {
                     "path": { "type": "string", "description": "The directory path to list (default: current directory)" }

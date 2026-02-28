@@ -10,9 +10,9 @@ pub struct WriteFileTool;
 impl LooperTool for WriteFileTool {
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
-            .name("write_file")
-            .description("Write content to a file. Creates the file if it doesn't exist, overwrites if it does.")
-            .paramters(json!({
+            .set_name("write_file")
+            .set_description("Write content to a file. Creates the file if it doesn't exist, overwrites if it does.")
+            .set_paramters(json!({
                 "type": "object",
                 "properties": {
                     "path": { "type": "string", "description": "The file path to write to" },

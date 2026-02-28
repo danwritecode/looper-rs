@@ -10,9 +10,9 @@ pub struct FindFilesTool;
 impl LooperTool for FindFilesTool {
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
-            .name("find_files")
-            .description("Find files matching a glob pattern recursively. Returns a list of matching file paths.")
-            .paramters(json!({
+            .set_name("find_files")
+            .set_description("Find files matching a glob pattern recursively. Returns a list of matching file paths.")
+            .set_paramters(json!({
                 "type": "object",
                 "properties": {
                     "pattern": { "type": "string", "description": "Glob pattern to match, e.g. '**/*.rs', 'src/**/*.toml'" },
