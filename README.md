@@ -18,6 +18,8 @@ This tool is *not* meant to be as robust as Claude Code/Codex. It's meant to be 
 - Dynamic tool injection
 
 ## Architecture
+
+```mermaid
 sequenceDiagram
     participant UI
     participant Looper
@@ -50,7 +52,7 @@ sequenceDiagram
 
     Handler-->>Looper: TurnComplete
     Looper-->>UI: TurnComplete
-
+```
 
 ## Setup
 
