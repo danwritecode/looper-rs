@@ -4,7 +4,7 @@ use console::{Style, Term};
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::sync::{Notify, mpsc};
 
-use loopin_rs::{looper::Looper, types::LooperToInterfaceMessage};
+use loopin_rs::{looper::Looper, tools::LooperTools, types::{Handlers, LooperToInterfaceMessage}};
 
 
 #[tokio::main]
@@ -13,9 +13,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let term = Term::stdout();
     term.clear_screen()?;
     let theme = Theme::default();
-    println!("{}", theme.greeting());
+
+    let handler = Handlers::OpenAIResponses;
+    let tools = LooperTools::new();
     let (tx, mut rx) = mpsc::channel(10000);
-    let mut looper = Looper::new(tx)?;
+
+    let mut looper = Looper::new(handler, tools, tx)?;
     let turn_done = Arc::new(Notify::new());
     let turn_done_tx = turn_done.clone();
 
