@@ -1,7 +1,12 @@
 use std::collections::HashMap;
 
 use async_anthropic::{
-    Client, types::{ContentBlockDelta, CreateMessagesRequestBuilder, Message, MessageBuilder, MessageContent, MessageRole, MessagesStreamEvent, ToolResultBuilder, ToolUseBuilder}
+    Client, 
+    types::{
+        ContentBlockDelta, CreateMessagesRequestBuilder, 
+        Message, MessageBuilder, MessageContent, MessageRole, 
+        MessagesStreamEvent, ToolResultBuilder, ToolUseBuilder
+    }
 };
 
 use async_recursion::async_recursion;
@@ -14,22 +19,11 @@ use tokio::sync::{
     oneshot,
 };
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
-use crate::{looper::AgentLoopState, services::ChatHandler, types::{
+use crate::{services::ChatHandler, types::{
     HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition,
 }};
-
-enum StopReason {
-    ToolUse,
-    Other
-}
-
-enum ContentBlockType {
-    Text(Vec<String>),
-    ToolUse(Vec<String>),
-    ToolResult
-}
 
 pub struct AnthropicHandler {
     client: Client,
@@ -156,20 +150,11 @@ impl AnthropicHandler {
 
                                         self.messages.push(message);
                                     }
-                                    _ => () // we really only care about tool use stop
-                                    // ContentBlockType::ToolResult => {},
+                                    _ => ()
                                 }
                             }
                         },
-                        MessagesStreamEvent::MessageStart { message, usage } => {
-                            // don't really care
-                        },
-                        MessagesStreamEvent::MessageDelta { delta, usage } => {
-                            // don't care i don't think
-                        }
-                        MessagesStreamEvent::MessageStop => {
-                            // don't really care
-                        }
+                        _ => ()
                     }
 
                 }
