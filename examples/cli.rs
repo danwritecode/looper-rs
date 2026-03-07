@@ -20,11 +20,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     term.clear_screen()?;
     let theme = Theme::default();
 
-    let handler = Handlers::Anthropic;
-    let tools: Arc<dyn LooperTools> = match handler {
-        Handlers::Anthropic => Arc::new(ToolSet::anthropic()),
-        _ => Arc::new(ToolSet::openai()),
-    };
+    // let handler = Handlers::Anthropic;
+    let handler = Handlers::OpenAIResponses;
+    let tools: Arc<dyn LooperTools> = Arc::new(ToolSet::new());
     let (tx, mut rx) = mpsc::channel(10000);
 
     let mut looper = Looper::new(handler, tools.clone(), tx)?;
@@ -256,33 +254,6 @@ impl LooperTool for FindFilesTool {
     }
 }
 
-struct SetAgentLoopStateTool;
-
-#[async_trait]
-impl LooperTool for SetAgentLoopStateTool {
-    fn tool(&self) -> LooperToolDefinition {
-        LooperToolDefinition::default()
-            .set_name("set_agent_loop_state")
-            .set_description("You will use this to signal to the agent loop when you want to continue or when to finish your turn. This means that you can choose to continue so that you have the opportunity to use more tools calls even after responding to a user.")
-            .set_paramters(json!({
-                "type": "object",
-                    "properties": {
-                        "state": {
-                            "type": "string",
-                            "enum": [ "done", "continue" ]
-                        },
-                        "continue_reason": { "type": "string", "description": "If state == 'continue', then provide the continue reason which should be the work you want to accomplish in the next loop iteration." }
-                    },
-                    "required": ["state"]
-            }))
-    }
-
-    async fn execute(&self, args: &Value) -> Value {
-        let reason = args["continue_reason"].to_string();
-        json!({ "State": format!("continuing with reason: {}", reason) })
-    }
-}
-
 // ── Tool sets ────────────────────────────────────────────────────────
 
 struct ToolSet {
@@ -290,18 +261,7 @@ struct ToolSet {
 }
 
 impl ToolSet {
-    fn openai() -> Self {
-        let mut tools: HashMap<String, Box<dyn LooperTool>> = HashMap::new();
-        tools.insert("read_file".to_string(), Box::new(ReadFileTool));
-        tools.insert("write_file".to_string(), Box::new(WriteFileTool));
-        tools.insert("list_directory".to_string(), Box::new(ListDirectoryTool));
-        tools.insert("grep".to_string(), Box::new(GrepTool));
-        tools.insert("find_files".to_string(), Box::new(FindFilesTool));
-        tools.insert("set_agent_loop_state".to_string(), Box::new(SetAgentLoopStateTool));
-        ToolSet { tools }
-    }
-
-    fn anthropic() -> Self {
+    fn new() -> Self {
         let mut tools: HashMap<String, Box<dyn LooperTool>> = HashMap::new();
         tools.insert("read_file".to_string(), Box::new(ReadFileTool));
         tools.insert("write_file".to_string(), Box::new(WriteFileTool));

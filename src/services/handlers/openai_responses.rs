@@ -178,7 +178,10 @@ impl OpenAIResponsesHandler {
 
         match args.get("state") {
             Some(s) => {
-                if s == "done" {
+                if s == "continue" {
+                    let reason = &args["continue_reason"];
+                    self.loop_state = AgentLoopState::Continue(reason.to_string()); 
+                } else {
                     self.loop_state = AgentLoopState::Done; 
                 }
             },
