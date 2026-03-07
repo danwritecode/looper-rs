@@ -1,21 +1,5 @@
-pub mod set_agent_loop_state;
-pub mod read_file;
-pub mod write_file;
-pub mod list_directory;
-pub mod grep;
-pub mod find_files;
-
-use std::collections::HashMap;
-
-pub use set_agent_loop_state::*;
-pub use read_file::*;
-pub use write_file::*;
-pub use list_directory::*;
-pub use grep::*;
-pub use find_files::*;
-
 use async_trait::async_trait;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::types::LooperToolDefinition;
 
@@ -25,35 +9,8 @@ pub trait LooperTool: Send + Sync {
     fn tool(&self) -> LooperToolDefinition;
 }
 
-pub struct LooperTools {
-    tools: HashMap<String, Box<dyn LooperTool>>
+#[async_trait]
+pub trait LooperTools: Send + Sync {
+    fn get_tools(&self) -> Vec<LooperToolDefinition>;
+    async fn run_tool(&self, name: &str, args: Value) -> Value;
 }
-
-impl LooperTools {
-    pub fn new() -> Self {
-        let mut tools: HashMap<String, Box<dyn LooperTool>> = HashMap::new();
-
-        tools.insert("read_file".to_string(), Box::new(ReadFileTool));
-        tools.insert("write_file".to_string(), Box::new(WriteFileTool));
-        tools.insert("list_directory".to_string(), Box::new(ListDirectoryTool));
-        tools.insert("grep".to_string(), Box::new(GrepTool));
-        tools.insert("find_files".to_string(), Box::new(FindFilesTool));
-        tools.insert("set_agent_loop_state".to_string(), Box::new(SetAgentLoopStateTool));
-
-        LooperTools { 
-            tools
-        }
-    }
-
-    pub fn get_tools(&self) -> Vec<LooperToolDefinition> {
-        self.tools.values().into_iter().map(|t| t.tool()).collect::<Vec<LooperToolDefinition>>()
-    }
-
-    pub async fn run_tool(&self, name: &str, args: Value) -> Value {
-        match self.tools.get(name) {
-            Some(tool) => tool.execute(&args).await,
-            None => json!({"error": format!("Unknown function: {}", name)})
-        } 
-    }
-}
-

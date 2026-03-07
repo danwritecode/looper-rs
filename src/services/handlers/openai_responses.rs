@@ -197,7 +197,7 @@ impl OpenAIResponsesHandler {
 impl ChatHandler for OpenAIResponsesHandler {
     async fn send_message(&mut self, message: &str) -> Result<()> {
         // reset loop state to continue on each message send
-        self.loop_state = AgentLoopState::Continue("".to_string());
+        self.loop_state = AgentLoopState::Done;
 
         let input = InputParam::Text(message.to_string());
         self.inner_send_message(Some(input)).await?;
@@ -218,9 +218,5 @@ impl ChatHandler for OpenAIResponsesHandler {
             .into_iter()
             .map(|t| Tool::Function(t.into()))
             .collect();
-    }
-
-    fn set_continue(&mut self) {
-        self.loop_state = AgentLoopState::Continue("".to_string());
     }
 }

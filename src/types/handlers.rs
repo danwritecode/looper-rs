@@ -1,4 +1,5 @@
 pub enum Handlers {
     OpenAICompletions,
-    OpenAIResponses
+    OpenAIResponses,
+    Anthropic
 }

@@ -262,8 +262,4 @@ impl ChatHandler for OpenAIChatHandler {
 
         self.tools = tools;
     }
-
-    fn set_continue(&mut self) {
-        self.loop_state = AgentLoopState::Continue("".to_string());
-    }
 }

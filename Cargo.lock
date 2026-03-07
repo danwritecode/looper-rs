@@ -9,6 +9,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "async-anthropic"
+version = "0.6.0"
+source = "git+https://github.com/danwritecode/async-anthropic#bddf804695a875c74ccf5aaa921202492d9225ee"
+dependencies = [
+ "backoff",
+ "derive_builder",
+ "reqwest",
+ "reqwest-eventsource",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "async-openai"
 version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -711,6 +729,7 @@ name = "loopin-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-anthropic",
  "async-openai",
  "async-recursion",
  "async-trait",
