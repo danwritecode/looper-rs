@@ -15,7 +15,7 @@ pub struct Looper {
     handler: Box<dyn ChatHandler>,
     looper_interface_sender: Sender<LooperToInterfaceMessage>,
     handler_looper_receiver: Arc<Mutex<Receiver<HandlerToLooperMessage>>>,
-    tools: Arc<LooperTools>,
+    tools: Arc<dyn LooperTools>,
 }
 
 pub enum AgentLoopState {
@@ -26,38 +26,35 @@ pub enum AgentLoopState {
 impl Looper {
     pub fn new(
         handler: Handlers,
-        tools: LooperTools,
+        tools: Arc<dyn LooperTools>,
         looper_interface_sender: Sender<LooperToInterfaceMessage>
     ) -> Result<Self> {
-
         // TODO: Set this to something reasonable, totally just guessed at 10k 
-        let (handler_looper_sender, handler_looper_receiver) = mpsc::channel(10000); // for handler to send messages to looper
+        let (handler_looper_sender, handler_looper_receiver) = mpsc::channel(10000);
         let handler_looper_receiver = Arc::new(Mutex::new(handler_looper_receiver));
-        let system_message = get_system_message();
 
         let mut handler: Box<dyn ChatHandler> = match handler {
             Handlers::OpenAIResponses => {
                 Box::new(OpenAIResponsesHandler::new(
                     handler_looper_sender,
-                    &system_message,
+                    &get_openai_system_message()
                 )?)
             },
             Handlers::OpenAICompletions => {
                 Box::new(OpenAIChatHandler::new(
                     handler_looper_sender,
-                    &system_message,
+                    &get_openai_system_message()
                 )?)
             },
             Handlers::Anthropic => {
                 Box::new(AnthropicHandler::new(
                     handler_looper_sender,
-                    &system_message,
+                    &get_anthropic_system_message()
                 )?)
             }
         };
 
         handler.set_tools(tools.get_tools());
-        let tools = Arc::new(tools);
 
         Ok(Looper {
             handler,
@@ -125,8 +122,12 @@ impl Looper {
     }
 }
 
-fn get_system_message() -> String {
-    format!("You are friendly and helpful.")
+fn get_openai_system_message() -> String {
+    include_str!("../prompts/system_prompt_openai.txt").to_string()
+}
+
+fn get_anthropic_system_message() -> String {
+    include_str!("../prompts/system_prompt_anthropic.txt").to_string()
 }
 
 // fn get_system_message() -> String {
