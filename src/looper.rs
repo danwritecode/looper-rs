@@ -11,7 +11,6 @@ use tokio::sync::mpsc::{self, Sender};
 
 pub struct Looper {
     handler: Box<dyn ChatHandler>,
-    tools: Option<Arc<dyn LooperTools>>,
     message_history: Option<Value>
 }
 
@@ -129,7 +128,6 @@ impl Looper {
         Ok(Looper {
             handler,
             message_history,
-            tools,
         })
     }
 
