@@ -120,6 +120,13 @@ impl AnthropicHandler {
                             }
                         },
                         MessagesStreamEvent::ContentBlockStop { index } => {
+                            // Send ThinkingComplete when a thinking block ends
+                            if let Some(MessageContent::Thinking(_)) = content_blocks.get(&index) {
+                                self.sender
+                                    .send(HandlerToLooperMessage::ThinkingComplete)
+                                    .await?;
+                            }
+
                             // Parse accumulated tool input JSON if present
                             if let Some(raw_input) = tool_input_bufs.remove(&index) {
                                 if let Some(MessageContent::ToolUse(t)) = content_blocks.get_mut(&index) {

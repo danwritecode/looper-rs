@@ -42,16 +42,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     io::stdout().flush().ok();
                 },
                 LooperToInterfaceMessage::Thinking(m) => {
-                    if thinking_buf.is_empty() {
-                        spinner = Some(theme.thinking_spinner());
-                    }
-                    thinking_buf.push_str(&m);
+                    print!("{}", theme.thinking.apply_to(&m));
+                    io::stdout().flush().ok();
                 },
                 LooperToInterfaceMessage::ThinkingComplete => {
-                    if !thinking_buf.is_empty() {
-                        println!("{}", theme.thinking.apply_to(&thinking_buf));
-                        thinking_buf.clear();
-                    }
+                    println!();
                 },
                 LooperToInterfaceMessage::ToolCall(name) => {
                     spinner = Some(theme.tool_spinner(&name));

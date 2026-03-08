@@ -35,41 +35,54 @@ impl Looper {
         let (handler_looper_sender, handler_looper_receiver) = mpsc::channel(10000);
         let handler_looper_receiver = Arc::new(Mutex::new(handler_looper_receiver));
 
-        let mut handler: Box<dyn ChatHandler> = match handler_type {
+        let handler: Box<dyn ChatHandler> = match handler_type {
             Handlers::OpenAIResponses(m) => {
-                Box::new(OpenAIResponsesHandler::new(
+                let mut handler = OpenAIResponsesHandler::new(
                     handler_looper_sender,
                     &m,
                     &get_openai_system_message()
-                )?)
+                )?;
+
+                if let Some(t) = &tools {
+                    let mut tool_defs = t.get_tools();
+                    let set_agent_loop_state = SetAgentLoopStateTool;
+                    tool_defs.push(set_agent_loop_state.tool());
+                    handler.set_tools(tool_defs);
+                }
+
+                Box::new(handler)
             },
             Handlers::OpenAICompletions(m) => {
-                Box::new(OpenAIChatHandler::new(
+                let mut handler = OpenAIChatHandler::new(
                     handler_looper_sender,
                     &m,
                     &get_openai_system_message()
-                )?)
+                )?;
+
+                if let Some(t) = &tools {
+                    let mut tool_defs = t.get_tools();
+                    let set_agent_loop_state = SetAgentLoopStateTool;
+                    tool_defs.push(set_agent_loop_state.tool());
+                    handler.set_tools(tool_defs);
+                }
+
+                Box::new(handler)
             },
             Handlers::Anthropic(m) => {
-                Box::new(AnthropicHandler::new(
+                let mut handler = AnthropicHandler::new(
                     handler_looper_sender,
                     &m,
                     &get_anthropic_system_message()
-                )?)
+                )?;
+
+                if let Some(t) = &tools {
+                    handler.set_tools(t.get_tools());
+                }
+
+
+                Box::new(handler)
             }
         };
-
-        if let Some(t) = &tools {
-            let mut tool_defs = t.get_tools();
-            let set_agent_loop_state = SetAgentLoopStateTool;
-            match handler_type {
-                Handlers::OpenAIResponses(_) | Handlers::OpenAICompletions(_) => {
-                    tool_defs.push(set_agent_loop_state.tool());
-                },
-                _ => {}
-            }
-            handler.set_tools(tool_defs);
-        }
 
         Ok(Looper {
             handler,
