@@ -3,28 +3,28 @@ use std::sync::Arc;
 use crate::{
     services::{StreamingChatHandler, anthropic::AnthropicHandler, openai_completions::OpenAIChatHandler},
     tools::LooperTools,
-    types::{HandlerToLooperMessage, Handlers, LooperToHandlerToolCallResult, LooperToInterfaceMessage},
+    types::{HandlerToLooperMessage, Handlers, LooperToHandlerToolCallResult, LooperToInterfaceMessage, MessageHistory},
 };
 use anyhow::Result;
-use serde_json::{Value, json};
+use serde_json::json;
 use tera::{Tera, Context};
 use tokio::sync::mpsc::{self, Sender};
 
 pub struct LooperStream {
     handler: Box<dyn StreamingChatHandler>,
-    message_history: Option<Value>,
+    message_history: Option<MessageHistory>,
 }
 
 pub struct LooperStreamBuilder<'a> {
     handler_type: Handlers<'a>,
-    message_history: Option<Value>,
+    message_history: Option<MessageHistory>,
     tools: Option<Arc<dyn LooperTools>>,
     instructions: Option<String>,
     interface_sender: Option<Sender<LooperToInterfaceMessage>>,
 }
 
 impl<'a> LooperStreamBuilder<'a> {
-    pub fn message_history(mut self, history: Value) -> Self {
+    pub fn message_history(mut self, history: MessageHistory) -> Self {
         self.message_history = Some(history);
         self
     }
@@ -60,6 +60,9 @@ impl<'a> LooperStreamBuilder<'a> {
                 }
 
                 Box::new(handler)
+            },
+            Handlers::OpenAIResponses(_m) => {
+                todo!("OpenAI Responses streaming handler not yet implemented")
             },
             Handlers::Anthropic(m) => {
                 let mut handler = AnthropicHandler::new(
@@ -154,10 +157,11 @@ impl LooperStream {
         }
     }
 
-    pub async fn send(&mut self, message: &str) -> Result<Value> {
-        let messages = self.handler.send_message(self.message_history.clone(), message).await?;
+    pub async fn send(&mut self, message: &str) -> Result<MessageHistory> {
+        let history = self.handler.send_message(self.message_history.clone(), message).await?;
+        self.message_history = Some(history.clone());
 
-        Ok(messages)
+        Ok(history)
     }
 }
 

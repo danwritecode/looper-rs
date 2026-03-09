@@ -2,18 +2,17 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use serde_json::Value;
 
 use crate::{
     tools::LooperTools,
-    types::{LooperToolDefinition, turn::TurnResult},
+    types::{LooperToolDefinition, MessageHistory, turn::TurnResult},
 };
 
 #[async_trait]
 pub trait ChatHandler: Send + Sync {
     async fn send_message(
         &mut self,
-        message_history: Option<Value>,
+        message_history: Option<MessageHistory>,
         message: &str,
         tools_runner: Option<&Arc<dyn LooperTools>>,
     ) -> Result<TurnResult>;

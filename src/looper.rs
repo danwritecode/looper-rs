@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use serde_json::Value;
 use tera::{Tera, Context};
 
 use crate::{
@@ -11,24 +10,24 @@ use crate::{
         handlers::openai_completions_non_streaming::OpenAINonStreamingChatHandler,
     },
     tools::LooperTools,
-    types::{Handlers, turn::TurnResult},
+    types::{Handlers, MessageHistory, turn::TurnResult},
 };
 
 pub struct Looper {
     handler: Box<dyn ChatHandler>,
-    message_history: Option<Value>,
+    message_history: Option<MessageHistory>,
     tools: Option<Arc<dyn LooperTools>>,
 }
 
 pub struct LooperBuilder<'a> {
     handler_type: Handlers<'a>,
-    message_history: Option<Value>,
+    message_history: Option<MessageHistory>,
     tools: Option<Arc<dyn LooperTools>>,
     instructions: Option<String>,
 }
 
 impl<'a> LooperBuilder<'a> {
-    pub fn message_history(mut self, history: Value) -> Self {
+    pub fn message_history(mut self, history: MessageHistory) -> Self {
         self.message_history = Some(history);
         self
     }
@@ -68,6 +67,9 @@ impl<'a> LooperBuilder<'a> {
                 }
 
                 Box::new(handler)
+            }
+            Handlers::OpenAIResponses(_m) => {
+                todo!("OpenAI Responses non-streaming handler not yet implemented")
             }
         };
 

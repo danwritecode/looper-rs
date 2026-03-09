@@ -14,7 +14,7 @@ use async_trait::async_trait;
 
 use anyhow::Result;
 use futures::StreamExt;
-use serde_json::Value;
+
 use tokio::sync::{
     mpsc::Sender,
     oneshot,
@@ -22,7 +22,7 @@ use tokio::sync::{
 
 
 use crate::{services::StreamingChatHandler, types::{
-    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition,
+    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition, MessageHistory,
 }};
 
 pub struct AnthropicHandler {
@@ -227,11 +227,11 @@ impl AnthropicHandler {
 #[async_trait]
 impl StreamingChatHandler for AnthropicHandler {
     async fn send_message(
-        &mut self, 
-        message_history: Option<Value>,
+        &mut self,
+        message_history: Option<MessageHistory>,
         message: &str
-    ) -> Result<Value> {
-        if let Some(m) = message_history {
+    ) -> Result<MessageHistory> {
+        if let Some(MessageHistory::Messages(m)) = message_history {
             let messages: Vec<Message> = serde_json::from_value(m)?;
             self.messages = messages;
         }
@@ -249,7 +249,7 @@ impl StreamingChatHandler for AnthropicHandler {
 
         let messages = serde_json::to_value(&self.messages)?;
 
-        Ok(messages)
+        Ok(MessageHistory::Messages(messages))
     }
 
     fn set_tools(&mut self, tools: Vec<LooperToolDefinition>) {

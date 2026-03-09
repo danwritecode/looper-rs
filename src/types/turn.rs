@@ -1,4 +1,5 @@
 use serde_json::Value;
+use super::MessageHistory;
 
 pub struct ThinkingBlock {
     pub content: String,
@@ -20,5 +21,5 @@ pub struct TurnStep {
 pub struct TurnResult {
     pub steps: Vec<TurnStep>,
     pub final_text: Option<String>,
-    pub message_history: Value,
+    pub message_history: MessageHistory,
 }

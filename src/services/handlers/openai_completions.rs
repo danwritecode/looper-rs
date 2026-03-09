@@ -24,7 +24,7 @@ use tokio::sync::{
 use serde_json::Value;
 
 use crate::{services::StreamingChatHandler, types::{
-    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition,
+    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition, MessageHistory,
 }};
 
 pub struct OpenAIChatHandler {
@@ -200,10 +200,10 @@ impl OpenAIChatHandler {
 impl StreamingChatHandler for OpenAIChatHandler {
     async fn send_message(
         &mut self,
-        message_history: Option<Value>,
+        message_history: Option<MessageHistory>,
         message: &str
-    ) -> Result<Value> {
-        if let Some(m) = message_history {
+    ) -> Result<MessageHistory> {
+        if let Some(MessageHistory::Messages(m)) = message_history {
             let messages: Vec<ChatCompletionRequestMessage> = serde_json::from_value(m)?;
             self.messages = messages;
         }
@@ -223,7 +223,7 @@ impl StreamingChatHandler for OpenAIChatHandler {
 
         let messages = serde_json::to_value(&self.messages)?;
 
-        Ok(messages)
+        Ok(MessageHistory::Messages(messages))
     }
 
     fn set_tools(&mut self, tools: Vec<LooperToolDefinition>) {

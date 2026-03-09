@@ -15,7 +15,7 @@ use serde_json::Value;
 use tokio::sync::{mpsc::Sender, oneshot};
 
 use crate::{
-    looper_stream::AgentLoopState, services::StreamingChatHandler, types::{HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition}
+    services::StreamingChatHandler, types::{HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition}
 };
 
 pub struct OpenAIResponsesHandler {

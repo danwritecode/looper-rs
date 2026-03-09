@@ -12,13 +12,12 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 
 use anyhow::Result;
-use serde_json::Value;
 
 use crate::{
     services::ChatHandler,
     tools::LooperTools,
     types::{
-        LooperToolDefinition,
+        LooperToolDefinition, MessageHistory,
         turn::{ThinkingBlock, ToolCallRecord, TurnResult, TurnStep},
     },
 };
@@ -153,11 +152,11 @@ impl AnthropicNonStreamingHandler {
 impl ChatHandler for AnthropicNonStreamingHandler {
     async fn send_message(
         &mut self,
-        message_history: Option<Value>,
+        message_history: Option<MessageHistory>,
         message: &str,
         tools_runner: Option<&Arc<dyn LooperTools>>,
     ) -> Result<TurnResult> {
-        if let Some(m) = message_history {
+        if let Some(MessageHistory::Messages(m)) = message_history {
             let messages: Vec<Message> = serde_json::from_value(m)?;
             self.messages = messages;
         }
@@ -175,7 +174,7 @@ impl ChatHandler for AnthropicNonStreamingHandler {
             .rev()
             .find_map(|s| s.text.clone());
 
-        let message_history = serde_json::to_value(&self.messages)?;
+        let message_history = MessageHistory::Messages(serde_json::to_value(&self.messages)?);
 
         Ok(TurnResult {
             steps,
