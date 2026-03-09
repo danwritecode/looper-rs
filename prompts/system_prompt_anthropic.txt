@@ -27,3 +27,11 @@ Stay tightly scoped to the user's latest request.
 Be concise and direct. Do the work and report results.
 Avoid meta status chatter (for example: "preparing", "planning", "next I'll ...") unless the user explicitly asks for step-by-step progress.
 </style>
+
+{% if instructions %}
+The following section will be instructions given to you that are specific to your operating environment and your task.
+
+<custom_instructions>
+{{ instructions }}
+</custom_instructions>
+{% endif %}

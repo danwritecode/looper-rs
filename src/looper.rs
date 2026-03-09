@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::Result;
 use serde_json::{Value, json};
+use tera::{Tera, Context};
 use tokio::sync::mpsc::{self, Sender};
 
 pub struct Looper {
@@ -25,6 +26,7 @@ impl Looper {
         handler_type: Handlers,
         message_history: Option<Value>,
         tools: Option<Arc<dyn LooperTools>>,
+        instructions: Option<String>,
         looper_interface_sender: Sender<LooperToInterfaceMessage>
     ) -> Result<Self> {
         let (handler_looper_sender, mut handler_looper_receiver) = mpsc::channel(10000);
@@ -34,7 +36,7 @@ impl Looper {
                 let mut handler = OpenAIChatHandler::new(
                     handler_looper_sender,
                     &m,
-                    &get_openai_system_message()
+                    &get_openai_system_message(instructions.as_deref())?
                 )?;
 
                 if let Some(t) = &tools {
@@ -50,7 +52,7 @@ impl Looper {
                 let mut handler = AnthropicHandler::new(
                     handler_looper_sender,
                     &m,
-                    &get_anthropic_system_message()
+                    &get_anthropic_system_message(instructions.as_deref())?
                 )?;
 
                 if let Some(t) = &tools {
@@ -138,14 +140,22 @@ impl Looper {
     }
 }
 
-fn get_openai_system_message() -> String {
-    include_str!("../prompts/system_prompt_openai.txt").to_string()
+fn render_system_message(template: &str, instructions: Option<&str>) -> Result<String> {
+    let mut tera = Tera::default();
+    tera.add_raw_template("system_prompt", template)?;
+
+    let mut ctx = Context::new();
+    if let Some(inst) = instructions {
+        ctx.insert("instructions", inst);
+    }
+
+    Ok(tera.render("system_prompt", &ctx)?)
 }
 
-fn get_anthropic_system_message() -> String {
-    include_str!("../prompts/system_prompt_anthropic.txt").to_string()
+fn get_openai_system_message(instructions: Option<&str>) -> Result<String> {
+    render_system_message(include_str!("../prompts/system_prompt_openai.txt"), instructions)
 }
 
-// fn get_system_message() -> String {
-//     include_str!("../prompts/system_prompt.txt").to_string()
-// }
+fn get_anthropic_system_message(instructions: Option<&str>) -> Result<String> {
+    render_system_message(include_str!("../prompts/system_prompt_anthropic.txt"), instructions)
+}
