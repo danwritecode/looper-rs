@@ -24,7 +24,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tools: Arc<dyn LooperTools> = Arc::new(ToolSet::new());
     let (tx, mut rx) = mpsc::channel(10000);
 
-    let mut looper = LooperStream::new(handler, None, Some(tools), None, tx)?;
+    let mut looper = LooperStream::builder(handler)
+        .tools(tools)
+        .interface_sender(tx)
+        .instructions("You're being used as a CLI example for an agent loop. Be succinct yet friendly and helpful.")
+        .build()?;
+
     let turn_done = Arc::new(Notify::new());
     let turn_done_tx = turn_done.clone();
 

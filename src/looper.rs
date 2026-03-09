@@ -20,21 +20,38 @@ pub struct Looper {
     tools: Option<Arc<dyn LooperTools>>,
 }
 
-impl Looper {
-    pub fn new(
-        handler_type: Handlers,
-        message_history: Option<Value>,
-        tools: Option<Arc<dyn LooperTools>>,
-        instructions: Option<String>,
-    ) -> Result<Self> {
-        let handler: Box<dyn ChatHandler> = match handler_type {
+pub struct LooperBuilder<'a> {
+    handler_type: Handlers<'a>,
+    message_history: Option<Value>,
+    tools: Option<Arc<dyn LooperTools>>,
+    instructions: Option<String>,
+}
+
+impl<'a> LooperBuilder<'a> {
+    pub fn message_history(mut self, history: Value) -> Self {
+        self.message_history = Some(history);
+        self
+    }
+
+    pub fn tools(mut self, tools: Arc<dyn LooperTools>) -> Self {
+        self.tools = Some(tools);
+        self
+    }
+
+    pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
+        self.instructions = Some(instructions.into());
+        self
+    }
+
+    pub fn build(self) -> Result<Looper> {
+        let handler: Box<dyn ChatHandler> = match self.handler_type {
             Handlers::Anthropic(m) => {
                 let mut handler = AnthropicNonStreamingHandler::new(
                     &m,
-                    &get_system_message(instructions.as_deref())?,
+                    &get_system_message(self.instructions.as_deref())?,
                 )?;
 
-                if let Some(t) = &tools {
+                if let Some(t) = &self.tools {
                     handler.set_tools(t.get_tools());
                 }
 
@@ -43,10 +60,10 @@ impl Looper {
             Handlers::OpenAICompletions(m) => {
                 let mut handler = OpenAINonStreamingChatHandler::new(
                     &m,
-                    &get_system_message(instructions.as_deref())?,
+                    &get_system_message(self.instructions.as_deref())?,
                 )?;
 
-                if let Some(t) = &tools {
+                if let Some(t) = &self.tools {
                     handler.set_tools(t.get_tools());
                 }
 
@@ -56,9 +73,20 @@ impl Looper {
 
         Ok(Looper {
             handler,
-            message_history,
-            tools,
+            message_history: self.message_history,
+            tools: self.tools,
         })
+    }
+}
+
+impl Looper {
+    pub fn builder(handler_type: Handlers) -> LooperBuilder {
+        LooperBuilder {
+            handler_type,
+            message_history: None,
+            tools: None,
+            instructions: None,
+        }
     }
 
     pub async fn send(&mut self, message: &str) -> Result<TurnResult> {
