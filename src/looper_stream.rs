@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use crate::{
-    services::{StreamingChatHandler, anthropic::AnthropicHandler, openai_completions::OpenAIChatHandler, openai_responses::OpenAIResponsesHandler},
-    tools::LooperTools,
+    services::{anthropic::AnthropicHandler, openai_completions::OpenAIChatHandler, openai_responses::OpenAIResponsesHandler, StreamingChatHandler},
+    tools::{LooperTools, SubAgentTool},
     types::{HandlerToLooperMessage, Handlers, LooperToHandlerToolCallResult, LooperToInterfaceMessage, MessageHistory},
 };
 use anyhow::Result;
 use serde_json::json;
 use tera::{Tera, Context};
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::{mpsc::{self, Sender}, Mutex};
 
 pub struct LooperStream {
     handler: Box<dyn StreamingChatHandler>,
@@ -18,7 +18,7 @@ pub struct LooperStream {
 pub struct LooperStreamBuilder<'a> {
     handler_type: Handlers<'a>,
     message_history: Option<MessageHistory>,
-    tools: Option<Arc<dyn LooperTools>>,
+    tools: Option<Arc<Mutex<dyn LooperTools>>>,
     instructions: Option<String>,
     interface_sender: Option<Sender<LooperToInterfaceMessage>>,
 }
@@ -29,7 +29,7 @@ impl<'a> LooperStreamBuilder<'a> {
         self
     }
 
-    pub fn tools(mut self, tools: Arc<dyn LooperTools>) -> Self {
+    pub fn tools(mut self, tools: Arc<Mutex<dyn LooperTools>>) -> Self {
         self.tools = Some(tools);
         self
     }
@@ -44,7 +44,7 @@ impl<'a> LooperStreamBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> Result<LooperStream> {
+    pub async fn build(mut self) -> Result<LooperStream> {
         let (handler_looper_sender, mut handler_looper_receiver) = mpsc::channel(10000);
 
         let handler: Box<dyn StreamingChatHandler> = match self.handler_type {
@@ -55,8 +55,11 @@ impl<'a> LooperStreamBuilder<'a> {
                     &get_system_message(self.instructions.as_deref())?
                 )?;
 
-                if let Some(t) = &self.tools {
-                    handler.set_tools(t.get_tools());
+                if let Some(t) = self.tools.as_mut() {
+                    let tc = t.clone();
+                    let mut t = t.lock().await;
+                    let _ = t.add_tool(Arc::new(Mutex::new(SubAgentTool::new(tc)))).await;
+                    handler.set_tools(t.get_tools().await);
                 }
 
                 Box::new(handler)
@@ -68,8 +71,11 @@ impl<'a> LooperStreamBuilder<'a> {
                     &get_system_message(self.instructions.as_deref())?
                 )?;
 
-                if let Some(t) = &self.tools {
-                    handler.set_tools(t.get_tools());
+                if let Some(t) = self.tools.as_mut() {
+                    let tc = t.clone();
+                    let mut t = t.lock().await;
+                    let _ = t.add_tool(Arc::new(Mutex::new(SubAgentTool::new(tc)))).await;
+                    handler.set_tools(t.get_tools().await);
                 }
 
                 Box::new(handler)
@@ -81,8 +87,11 @@ impl<'a> LooperStreamBuilder<'a> {
                     &get_system_message(self.instructions.as_deref())?
                 )?;
 
-                if let Some(t) = &self.tools {
-                    handler.set_tools(t.get_tools());
+                if let Some(t) = self.tools.as_mut() {
+                    let tc = t.clone();
+                    let mut t = t.lock().await;
+                    let _ = t.add_tool(Arc::new(Mutex::new(SubAgentTool::new(tc)))).await;
+                    handler.set_tools(t.get_tools().await);
                 }
 
                 Box::new(handler)
@@ -92,7 +101,6 @@ impl<'a> LooperStreamBuilder<'a> {
         // Spawn a single long-lived listener task that forwards messages
         // from the handler to the interface and executes tool calls.
         if let Some(l_i_s) = self.interface_sender {
-            let tools_clone = self.tools.clone();
             tokio::spawn(async move {
                 while let Some(message) = handler_looper_receiver.recv().await {
                     match message {
@@ -126,8 +134,11 @@ impl<'a> LooperStreamBuilder<'a> {
                                 .await
                                 .unwrap();
 
-                            let response = match &tools_clone {
-                                Some(t) => t.run_tool(&tc.name, tc.args).await,
+                            let response = match &self.tools {
+                                Some(t) => {
+                                    let t = t.lock().await;
+                                    t.run_tool(&tc.name, tc.args).await
+                                },
                                 None => json!({"Error": "Unsupported tool called"})
                             };
 

@@ -18,6 +18,7 @@ use async_trait::async_trait;
 
 use anyhow::Result;
 use serde_json::Value;
+use tokio::sync::Mutex;
 
 use crate::{
     services::ChatHandler,
@@ -54,7 +55,7 @@ impl OpenAINonStreamingChatHandler {
     #[async_recursion]
     async fn inner_send_message(
         &mut self,
-        tools_runner: Option<&'async_recursion Arc<dyn LooperTools>>,
+        tools_runner: Option<&'async_recursion Arc<Mutex<dyn LooperTools>>>,
         steps: &mut Vec<TurnStep>,
     ) -> Result<()> {
         let request = CreateChatCompletionRequestArgs::default()
@@ -107,7 +108,10 @@ impl OpenAINonStreamingChatHandler {
                 let args: Value = serde_json::from_str(&func_call.function.arguments)?;
 
                 let result = match tools_runner {
-                    Some(runner) => runner.run_tool(&func_call.function.name, args.clone()).await,
+                    Some(runner) => {
+                        let runner = runner.lock().await;
+                        runner.run_tool(&func_call.function.name, args.clone()).await
+                    },
                     None => serde_json::json!({"error": "No tools runner available"}),
                 };
 
@@ -164,7 +168,7 @@ impl ChatHandler for OpenAINonStreamingChatHandler {
         &mut self,
         message_history: Option<MessageHistory>,
         message: &str,
-        tools_runner: Option<&Arc<dyn LooperTools>>,
+        tools_runner: Option<&Arc<Mutex<dyn LooperTools>>>,
     ) -> Result<TurnResult> {
         if let Some(MessageHistory::Messages(m)) = message_history {
             let messages: Vec<ChatCompletionRequestMessage> = serde_json::from_value(m)?;

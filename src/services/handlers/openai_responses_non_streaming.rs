@@ -13,6 +13,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 
 use anyhow::Result;
+use tokio::sync::Mutex;
 
 use crate::{
     services::ChatHandler,
@@ -48,7 +49,7 @@ impl OpenAIResponsesNonStreamingHandler {
     async fn inner_send_message(
         &mut self,
         input: Option<InputParam>,
-        tools_runner: Option<&'async_recursion Arc<dyn LooperTools>>,
+        tools_runner: Option<&'async_recursion Arc<Mutex<dyn LooperTools>>>,
         steps: &mut Vec<TurnStep>,
     ) -> Result<()> {
         let mut builder = CreateResponseArgs::default();
@@ -113,7 +114,10 @@ impl OpenAIResponsesNonStreamingHandler {
                 let args = serde_json::from_str(&fc.arguments)?;
 
                 let result = match tools_runner {
-                    Some(runner) => runner.run_tool(&fc.name, args).await,
+                    Some(runner) => {
+                        let runner = runner.lock().await;
+                        runner.run_tool(&fc.name, args).await 
+                    },
                     None => serde_json::json!({"error": "No tools runner available"}),
                 };
 
@@ -164,7 +168,7 @@ impl ChatHandler for OpenAIResponsesNonStreamingHandler {
         &mut self,
         message_history: Option<MessageHistory>,
         message: &str,
-        tools_runner: Option<&Arc<dyn LooperTools>>,
+        tools_runner: Option<&Arc<Mutex<dyn LooperTools>>>,
     ) -> Result<TurnResult> {
         if let Some(MessageHistory::ResponseId(id)) = message_history {
             self.previous_response_id = Some(id);

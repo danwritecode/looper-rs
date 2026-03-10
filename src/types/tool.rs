@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LooperToolDefinition {
     pub name: String,
     pub description: String,

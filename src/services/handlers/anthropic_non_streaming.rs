@@ -12,6 +12,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 
 use anyhow::Result;
+use tokio::sync::Mutex;
 
 use crate::{
     services::ChatHandler,
@@ -46,7 +47,7 @@ impl AnthropicNonStreamingHandler {
     #[async_recursion]
     async fn inner_send_message(
         &mut self,
-        tools_runner: Option<&'async_recursion Arc<dyn LooperTools>>,
+        tools_runner: Option<&'async_recursion Arc<Mutex<dyn LooperTools>>>,
         steps: &mut Vec<TurnStep>,
     ) -> Result<()> {
         let request = CreateMessagesRequestBuilder::default()
@@ -103,7 +104,10 @@ impl AnthropicNonStreamingHandler {
         if !tool_uses.is_empty() {
             for tool_use in &tool_uses {
                 let result = match tools_runner {
-                    Some(runner) => runner.run_tool(&tool_use.name, tool_use.input.clone()).await,
+                    Some(runner) => {
+                        let runner = runner.lock().await;
+                        runner.run_tool(&tool_use.name, tool_use.input.clone()).await
+                    },
                     None => serde_json::json!({"error": "No tools runner available"}),
                 };
 
@@ -154,7 +158,7 @@ impl ChatHandler for AnthropicNonStreamingHandler {
         &mut self,
         message_history: Option<MessageHistory>,
         message: &str,
-        tools_runner: Option<&Arc<dyn LooperTools>>,
+        tools_runner: Option<&Arc<Mutex<dyn LooperTools>>>,
     ) -> Result<TurnResult> {
         if let Some(MessageHistory::Messages(m)) = message_history {
             let messages: Vec<Message> = serde_json::from_value(m)?;

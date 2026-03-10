@@ -8,18 +8,20 @@ use looper::{
     tools::{LooperTool, LooperTools},
     types::{Handlers, LooperToolDefinition},
 };
+use tokio::sync::Mutex;
 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
 
-    let tools: Arc<dyn LooperTools> = Arc::new(ToolSet::new());
+    let tools: Arc<Mutex<dyn LooperTools>> = Arc::new(Mutex::new(ToolSet::new()));
 
     let mut looper = Looper::builder(Handlers::OpenAIResponses("gpt-5.4"))
         .tools(tools)
+        .enable_sub_agents(true)
         .instructions("You're being used as a CLI example for an agent loop. Be succinct yet friendly and helpful.")
-        .build()?;
+        .build().await?;
 
     loop {
         print!("> ");
@@ -62,6 +64,8 @@ struct ReadFileTool;
 
 #[async_trait]
 impl LooperTool for ReadFileTool {
+    fn get_tool_name(&self) -> String { "read_file".to_string() }
+
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
             .set_name("read_file")
@@ -88,6 +92,8 @@ struct ListDirectoryTool;
 
 #[async_trait]
 impl LooperTool for ListDirectoryTool {
+    fn get_tool_name(&self) -> String { "list_directory".to_string() }
+
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
             .set_name("list_directory")
@@ -126,27 +132,42 @@ impl LooperTool for ListDirectoryTool {
 // ── Tool set ────────────────────────────────────────────────────────
 
 struct ToolSet {
-    tools: HashMap<String, Box<dyn LooperTool>>,
+    tools: HashMap<String, Arc<Mutex<dyn LooperTool>>>,
 }
 
 impl ToolSet {
     fn new() -> Self {
-        let mut tools: HashMap<String, Box<dyn LooperTool>> = HashMap::new();
-        tools.insert("read_file".to_string(), Box::new(ReadFileTool));
-        tools.insert("list_directory".to_string(), Box::new(ListDirectoryTool));
+        let mut tools: HashMap<String, Arc<Mutex<dyn LooperTool>>> = HashMap::new();
+        tools.insert("read_file".to_string(), Arc::new(Mutex::new(ReadFileTool)));
+        tools.insert("list_directory".to_string(), Arc::new(Mutex::new(ListDirectoryTool)));
         ToolSet { tools }
     }
 }
 
 #[async_trait]
 impl LooperTools for ToolSet {
-    fn get_tools(&self) -> Vec<LooperToolDefinition> {
-        self.tools.values().map(|t| t.tool()).collect()
+    async fn get_tools(&self) -> Vec<LooperToolDefinition> {
+        let mut tools = Vec::with_capacity(self.tools.len());
+
+        for t in self.tools.values() {
+            let guard = t.lock().await;
+            tools.push(guard.tool().clone());
+        }
+
+        tools
+    }
+
+    async fn add_tool(&mut self, tool: Arc<Mutex<dyn LooperTool>>) {
+        let tool_name = tool.lock().await.get_tool_name();
+        self.tools.insert(tool_name, tool);
     }
 
     async fn run_tool(&self, name: &str, args: Value) -> Value {
         match self.tools.get(name) {
-            Some(tool) => tool.execute(&args).await,
+            Some(tool) => {
+                let tool = tool.lock().await;
+                tool.execute(&args).await
+            },
             None => json!({"error": format!("Unknown function: {}", name)}),
         }
     }
