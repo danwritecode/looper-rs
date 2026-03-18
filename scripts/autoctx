@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+AUTOCONTEXT_SOURCE_DIR="${AUTOCONTEXT_SOURCE_DIR:-/home/fabian/autocontext/autocontext}"
+AUTOCONTEXT_BIN="${AUTOCONTEXT_BIN:-${AUTOCONTEXT_SOURCE_DIR}/.venv/bin/autoctx}"
+
+if [ ! -d "${AUTOCONTEXT_SOURCE_DIR}" ]; then
+  printf 'autocontext source directory not found: %s\n' "${AUTOCONTEXT_SOURCE_DIR}" >&2
+  printf 'Set AUTOCONTEXT_SOURCE_DIR to your local autocontext/autocontext path.\n' >&2
+  exit 1
+fi
+
+if [ ! -x "${AUTOCONTEXT_BIN}" ]; then
+  printf 'autoctx executable not found: %s\n' "${AUTOCONTEXT_BIN}" >&2
+  printf 'Run: uv --directory "%s" sync --group dev\n' "${AUTOCONTEXT_SOURCE_DIR}" >&2
+  exit 1
+fi
+
+: "${AUTOCONTEXT_DB_PATH:=${REPO_ROOT}/.autocontext/runs/autocontext.sqlite3}"
+: "${AUTOCONTEXT_RUNS_ROOT:=${REPO_ROOT}/.autocontext/runs}"
+: "${AUTOCONTEXT_KNOWLEDGE_ROOT:=${REPO_ROOT}/.autocontext/knowledge}"
+: "${AUTOCONTEXT_SKILLS_ROOT:=${REPO_ROOT}/.autocontext/skills}"
+: "${AUTOCONTEXT_CLAUDE_SKILLS_PATH:=${REPO_ROOT}/.autocontext/claude-skills}"
+
+export AUTOCONTEXT_DB_PATH
+export AUTOCONTEXT_RUNS_ROOT
+export AUTOCONTEXT_KNOWLEDGE_ROOT
+export AUTOCONTEXT_SKILLS_ROOT
+export AUTOCONTEXT_CLAUDE_SKILLS_PATH
+
+exec "${AUTOCONTEXT_BIN}" "$@"

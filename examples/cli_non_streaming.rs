@@ -1,4 +1,9 @@
-use std::{collections::HashMap, error::Error, io::{self, Write}, sync::Arc};
+use std::{
+    collections::HashMap,
+    error::Error,
+    io::{self, Write},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -9,7 +14,6 @@ use looper::{
     types::{Handlers, LooperToolDefinition},
 };
 use tokio::sync::Mutex;
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -28,7 +32,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .sub_agent(agent_looper)
         .instructions("You're being used as a CLI example for an agent loop. Be succinct yet friendly and helpful.")
         .build().await?;
-
 
     loop {
         print!("> ");
@@ -64,14 +67,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-
 // ── Tool implementations ────────────────────────────────────────────
 
 struct ReadFileTool;
 
 #[async_trait]
 impl LooperTool for ReadFileTool {
-    fn get_tool_name(&self) -> String { "read_file".to_string() }
+    fn get_tool_name(&self) -> String {
+        "read_file".to_string()
+    }
 
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
@@ -99,7 +103,9 @@ struct ListDirectoryTool;
 
 #[async_trait]
 impl LooperTool for ListDirectoryTool {
-    fn get_tool_name(&self) -> String { "list_directory".to_string() }
+    fn get_tool_name(&self) -> String {
+        "list_directory".to_string()
+    }
 
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
@@ -121,7 +127,11 @@ impl LooperTool for ListDirectoryTool {
                 let mut items = Vec::new();
                 while let Ok(Some(entry)) = entries.next_entry().await {
                     let name = entry.file_name().to_string_lossy().to_string();
-                    let is_dir = entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false);
+                    let is_dir = entry
+                        .file_type()
+                        .await
+                        .map(|ft| ft.is_dir())
+                        .unwrap_or(false);
                     if is_dir {
                         items.push(format!("{}/", name));
                     } else {
@@ -146,7 +156,10 @@ impl ToolSet {
     fn new() -> Self {
         let mut tools: HashMap<String, Mutex<Arc<dyn LooperTool>>> = HashMap::new();
         tools.insert("read_file".to_string(), Mutex::new(Arc::new(ReadFileTool)));
-        tools.insert("list_directory".to_string(), Mutex::new(Arc::new(ListDirectoryTool)));
+        tools.insert(
+            "list_directory".to_string(),
+            Mutex::new(Arc::new(ListDirectoryTool)),
+        );
         ToolSet { tools }
     }
 }
@@ -175,7 +188,7 @@ impl LooperTools for ToolSet {
                 let mut arc = tool_mutex.lock().await;
                 let tool = Arc::get_mut(&mut arc).expect("tool has multiple references");
                 tool.execute(&args).await
-            },
+            }
             None => json!({"error": format!("Unknown function: {}", name)}),
         }
     }

@@ -1,5 +1,5 @@
-use async_openai::types::chat::{ChatCompletionTool, FunctionObjectArgs};
 use crate::types::LooperToolDefinition;
+use async_openai::types::chat::{ChatCompletionTool, FunctionObjectArgs};
 
 impl From<LooperToolDefinition> for ChatCompletionTool {
     fn from(value: LooperToolDefinition) -> Self {
@@ -9,7 +9,7 @@ impl From<LooperToolDefinition> for ChatCompletionTool {
                 .description(value.description)
                 .parameters(value.parameters)
                 .build()
-                .expect("Failed to build FunctionObjectArgs from LooperTool")
+                .expect("Failed to build FunctionObjectArgs from LooperTool"),
         }
     }
 }

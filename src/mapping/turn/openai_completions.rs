@@ -1,5 +1,5 @@
-use async_openai::types::chat::{ChatChoice, FinishReason};
 use crate::types::turn::TurnStep;
+use async_openai::types::chat::{ChatChoice, FinishReason};
 
 impl From<ChatChoice> for TurnStep {
     fn from(choice: ChatChoice) -> Self {
@@ -11,7 +11,11 @@ impl From<ChatChoice> for TurnStep {
             text,
             // Tool calls are handled separately in the handler
             // since they need to be executed and recorded with results
-            tool_calls: if has_tool_calls { Vec::new() } else { Vec::new() },
+            tool_calls: if has_tool_calls {
+                Vec::new()
+            } else {
+                Vec::new()
+            },
         }
     }
 }

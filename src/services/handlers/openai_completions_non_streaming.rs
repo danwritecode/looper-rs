@@ -4,12 +4,10 @@ use async_openai::{
     Client,
     config::OpenAIConfig,
     types::chat::{
-        ChatCompletionMessageToolCalls,
-        ChatCompletionRequestAssistantMessage,
+        ChatCompletionMessageToolCalls, ChatCompletionRequestAssistantMessage,
         ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
         ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessageArgs,
-        ChatCompletionTools, CreateChatCompletionRequestArgs, FinishReason,
-        ReasoningEffort,
+        ChatCompletionTools, CreateChatCompletionRequestArgs, FinishReason, ReasoningEffort,
     },
 };
 
@@ -109,9 +107,11 @@ impl OpenAINonStreamingChatHandler {
 
                 let tr = tr.clone();
                 tool_join_set.spawn(async move {
-                    let args: Value = serde_json::from_str(&func_call.function.arguments)
-                        .unwrap_or_default();
-                    let result = tr.run_tool(func_call.function.name.clone(), args.clone()).await;
+                    let args: Value =
+                        serde_json::from_str(&func_call.function.arguments).unwrap_or_default();
+                    let result = tr
+                        .run_tool(func_call.function.name.clone(), args.clone())
+                        .await;
 
                     (result, func_call, args)
                 });
@@ -135,9 +135,12 @@ impl OpenAINonStreamingChatHandler {
                             }
                             .into(),
                         );
-                    },
+                    }
                     Err(e) => {
-                        eprintln!("Join Error occured when collecting tool call results | Error: {}", e);
+                        eprintln!(
+                            "Join Error occured when collecting tool call results | Error: {}",
+                            e
+                        );
                     }
                 }
             }
@@ -195,10 +198,7 @@ impl ChatHandler for OpenAINonStreamingChatHandler {
         let mut steps = Vec::new();
         self.inner_send_message(tools_runner, &mut steps).await?;
 
-        let final_text = steps
-            .iter()
-            .rev()
-            .find_map(|s| s.text.clone());
+        let final_text = steps.iter().rev().find_map(|s| s.text.clone());
 
         let message_history = MessageHistory::Messages(serde_json::to_value(&self.messages)?);
 

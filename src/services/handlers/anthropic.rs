@@ -3,10 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use async_anthropic::{
     Client,
     types::{
-        ContentBlockDelta, CreateMessagesRequestBuilder, Message, 
-        MessageContent, MessageContentList, MessageRole, MessagesStreamEvent, 
-        Thinking, Tool, ToolResultBuilder
-    }
+        ContentBlockDelta, CreateMessagesRequestBuilder, Message, MessageContent,
+        MessageContentList, MessageRole, MessagesStreamEvent, Thinking, Tool, ToolResultBuilder,
+    },
 };
 
 use async_recursion::async_recursion;
@@ -17,10 +16,14 @@ use futures::StreamExt;
 
 use tokio::{sync::mpsc::Sender, task::JoinSet};
 
-
-use crate::{services::StreamingChatHandler, tools::LooperTools, types::{
-    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition, MessageHistory,
-}};
+use crate::{
+    services::StreamingChatHandler,
+    tools::LooperTools,
+    types::{
+        HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition,
+        MessageHistory,
+    },
+};
 
 pub struct AnthropicHandler {
     client: Client,
@@ -48,15 +51,12 @@ impl AnthropicHandler {
             system_message: system_message.to_string(),
             messages,
             sender,
-            tools
+            tools,
         })
     }
 
     #[async_recursion]
-    async fn inner_send_message(
-        &mut self,
-        tools_runner: Arc<dyn LooperTools>,
-    ) -> Result<String> {
+    async fn inner_send_message(&mut self, tools_runner: Arc<dyn LooperTools>) -> Result<String> {
         let request = CreateMessagesRequestBuilder::default()
             .model(&self.model)
             .system(self.system_message.clone())
@@ -65,7 +65,6 @@ impl AnthropicHandler {
             .max_tokens(16384)
             .thinking(Thinking::Adaptive)
             .build()?;
-
 
         let mut stream = self.client.messages().create_stream(request).await;
         let mut tool_join_set = JoinSet::new();
@@ -77,9 +76,12 @@ impl AnthropicHandler {
             match result {
                 Ok(response) => {
                     match response {
-                        MessagesStreamEvent::ContentBlockStart { index, content_block } => {
+                        MessagesStreamEvent::ContentBlockStart {
+                            index,
+                            content_block,
+                        } => {
                             content_blocks.insert(index, content_block);
-                        },
+                        }
                         MessagesStreamEvent::ContentBlockDelta { index, delta } => {
                             if let Some(cb) = content_blocks.get_mut(&index) {
                                 match delta {
@@ -91,7 +93,7 @@ impl AnthropicHandler {
                                                 .send(HandlerToLooperMessage::Assistant(text))
                                                 .await?;
                                         }
-                                    },
+                                    }
                                     ContentBlockDelta::ThinkingDelta { thinking } => {
                                         if let MessageContent::Thinking(t) = cb {
                                             t.thinking += &thinking;
@@ -100,7 +102,7 @@ impl AnthropicHandler {
                                                 .send(HandlerToLooperMessage::Thinking(thinking))
                                                 .await?;
                                         }
-                                    },
+                                    }
                                     ContentBlockDelta::SignatureDelta { signature } => {
                                         if let MessageContent::Thinking(_) = cb {
                                             signatures
@@ -108,7 +110,7 @@ impl AnthropicHandler {
                                                 .or_default()
                                                 .push_str(&signature);
                                         }
-                                    },
+                                    }
                                     ContentBlockDelta::InputJsonDelta { partial_json } => {
                                         if let MessageContent::ToolUse(t) = cb {
                                             tool_input_bufs
@@ -117,13 +119,15 @@ impl AnthropicHandler {
                                                 .push_str(&partial_json);
 
                                             self.sender
-                                                .send(HandlerToLooperMessage::ToolCallPending(t.id.clone()))
+                                                .send(HandlerToLooperMessage::ToolCallPending(
+                                                    t.id.clone(),
+                                                ))
                                                 .await?;
                                         }
                                     }
                                 }
                             }
-                        },
+                        }
                         MessagesStreamEvent::ContentBlockStop { index } => {
                             // Send ThinkingComplete when a thinking block ends
                             if let Some(MessageContent::Thinking(_)) = content_blocks.get(&index) {
@@ -134,16 +138,17 @@ impl AnthropicHandler {
 
                             // Parse accumulated tool input JSON if present
                             if let Some(raw_input) = tool_input_bufs.remove(&index) {
-                                if let Some(MessageContent::ToolUse(t)) = content_blocks.get_mut(&index) {
+                                if let Some(MessageContent::ToolUse(t)) =
+                                    content_blocks.get_mut(&index)
+                                {
                                     if !raw_input.is_empty() {
                                         t.input = serde_json::from_str(&raw_input)?;
                                     }
                                 }
                             }
-                        },
-                        _ => ()
+                        }
+                        _ => (),
                     }
-
                 }
                 Err(err) => {
                     println!("error: {err:?}");
@@ -203,24 +208,27 @@ impl AnthropicHandler {
                 match result {
                     Ok((result, tool_use)) => {
                         self.sender
-                            .send(HandlerToLooperMessage::ToolCallComplete(tool_use.id.clone()))
+                            .send(HandlerToLooperMessage::ToolCallComplete(
+                                tool_use.id.clone(),
+                            ))
                             .await?;
 
                         // Push tool result message to history
                         self.messages.push(Message {
                             role: MessageRole::User,
-                            content: MessageContentList(vec![
-                                MessageContent::ToolResult(
-                                    ToolResultBuilder::default()
-                                        .tool_use_id(&tool_use.id)
-                                        .content(result.to_string())
-                                        .build()?
-                                )
-                            ]),
+                            content: MessageContentList(vec![MessageContent::ToolResult(
+                                ToolResultBuilder::default()
+                                    .tool_use_id(&tool_use.id)
+                                    .content(result.to_string())
+                                    .build()?,
+                            )]),
                         });
-                    },
+                    }
                     Err(e) => {
-                        eprintln!("Join Error occured when collecting tool call results | Error: {}", e);
+                        eprintln!(
+                            "Join Error occured when collecting tool call results | Error: {}",
+                            e
+                        );
                     }
                 }
             }
@@ -262,9 +270,6 @@ impl StreamingChatHandler for AnthropicHandler {
     }
 
     fn set_tools(&mut self, tools: Vec<LooperToolDefinition>) {
-        self.tools = tools
-            .into_iter()
-            .map(|t| t.into())
-            .collect();
+        self.tools = tools.into_iter().map(|t| t.into()).collect();
     }
 }

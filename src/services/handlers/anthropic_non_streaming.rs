@@ -3,8 +3,8 @@ use std::sync::Arc;
 use async_anthropic::{
     Client,
     types::{
-        CreateMessagesRequestBuilder, Message, MessageContent, MessageContentList,
-        MessageRole, Thinking, Tool, ToolResultBuilder,
+        CreateMessagesRequestBuilder, Message, MessageContent, MessageContentList, MessageRole,
+        Thinking, Tool, ToolResultBuilder,
     },
 };
 
@@ -108,7 +108,9 @@ impl AnthropicNonStreamingHandler {
             for tool_use in tool_uses {
                 let tr = tr.clone();
                 tool_join_set.spawn(async move {
-                    let result = tr.run_tool(tool_use.name.clone(), tool_use.input.clone()).await;
+                    let result = tr
+                        .run_tool(tool_use.name.clone(), tool_use.input.clone())
+                        .await;
 
                     (result, tool_use)
                 });
@@ -127,22 +129,22 @@ impl AnthropicNonStreamingHandler {
                         // Push tool result message to history
                         self.messages.push(Message {
                             role: MessageRole::User,
-                            content: MessageContentList(vec![
-                                MessageContent::ToolResult(
-                                    ToolResultBuilder::default()
-                                        .tool_use_id(&tool_use.id)
-                                        .content(result.to_string())
-                                        .build()?
-                                )
-                            ]),
+                            content: MessageContentList(vec![MessageContent::ToolResult(
+                                ToolResultBuilder::default()
+                                    .tool_use_id(&tool_use.id)
+                                    .content(result.to_string())
+                                    .build()?,
+                            )]),
                         });
-                    },
+                    }
                     Err(e) => {
-                        eprintln!("Join Error occured when collecting tool call results | Error: {}", e);
+                        eprintln!(
+                            "Join Error occured when collecting tool call results | Error: {}",
+                            e
+                        );
                     }
                 }
             }
-
 
             steps.push(TurnStep {
                 thinking,
@@ -185,10 +187,7 @@ impl ChatHandler for AnthropicNonStreamingHandler {
         let mut steps = Vec::new();
         self.inner_send_message(tools_runner, &mut steps).await?;
 
-        let final_text = steps
-            .iter()
-            .rev()
-            .find_map(|s| s.text.clone());
+        let final_text = steps.iter().rev().find_map(|s| s.text.clone());
 
         let message_history = MessageHistory::Messages(serde_json::to_value(&self.messages)?);
 
@@ -200,9 +199,6 @@ impl ChatHandler for AnthropicNonStreamingHandler {
     }
 
     fn set_tools(&mut self, tools: Vec<LooperToolDefinition>) {
-        self.tools = tools
-            .into_iter()
-            .map(|t| t.into())
-            .collect();
+        self.tools = tools.into_iter().map(|t| t.into()).collect();
     }
 }
