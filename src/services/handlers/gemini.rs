@@ -17,7 +17,8 @@ use crate::{
     services::StreamingChatHandler,
     tools::LooperTools,
     types::{
-        HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition, MessageHistory,
+        HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition,
+        MessageHistory,
     },
 };
 
@@ -37,7 +38,9 @@ impl GeminiHandler {
     ) -> Result<Self> {
         let api_key = std::env::var("GEMINI_API_KEY")
             .or_else(|_| std::env::var("GOOGLE_API_KEY"))
-            .map_err(|_| anyhow::anyhow!("GEMINI_API_KEY or GOOGLE_API_KEY environment variable must be set"))?;
+            .map_err(|_| {
+                anyhow::anyhow!("GEMINI_API_KEY or GOOGLE_API_KEY environment variable must be set")
+            })?;
 
         let model_id = if model.starts_with("models/") {
             Model::Custom(model.to_string())
@@ -56,11 +59,9 @@ impl GeminiHandler {
     }
 
     #[async_recursion]
-    async fn inner_send_message(
-        &mut self,
-        tools_runner: Arc<dyn LooperTools>,
-    ) -> Result<()> {
-        let mut builder = self.client
+    async fn inner_send_message(&mut self, tools_runner: Arc<dyn LooperTools>) -> Result<()> {
+        let mut builder = self
+            .client
             .generate_content()
             .with_system_prompt(&self.system_message)
             .with_messages(self.messages.clone())
@@ -76,7 +77,8 @@ impl GeminiHandler {
         let mut all_text = String::new();
         let mut thinking_text = String::new();
         // Store function calls with their pre-assigned IDs
-        let mut function_calls: Vec<(gemini_rust::FunctionCall, Option<String>, String)> = Vec::new();
+        let mut function_calls: Vec<(gemini_rust::FunctionCall, Option<String>, String)> =
+            Vec::new();
         let mut had_thinking = false;
 
         while let Some(chunk) = stream.try_next().await? {
@@ -86,7 +88,8 @@ impl GeminiHandler {
                 &mut thinking_text,
                 &mut function_calls,
                 &mut had_thinking,
-            ).await?;
+            )
+            .await?;
         }
 
         if had_thinking {
@@ -162,7 +165,9 @@ impl GeminiHandler {
                 match result {
                     Ok((result, tool_use)) => {
                         self.sender
-                            .send(HandlerToLooperMessage::ToolCallComplete(tool_use.id.clone()))
+                            .send(HandlerToLooperMessage::ToolCallComplete(
+                                tool_use.id.clone(),
+                            ))
                             .await?;
 
                         function_response_parts.push(Part::FunctionResponse {
@@ -173,7 +178,10 @@ impl GeminiHandler {
                         });
                     }
                     Err(e) => {
-                        eprintln!("Join Error occured when collecting tool call results | Error: {}", e);
+                        eprintln!(
+                            "Join Error occured when collecting tool call results | Error: {}",
+                            e
+                        );
                     }
                 }
             }
@@ -205,7 +213,11 @@ impl GeminiHandler {
             if let Some(parts) = &candidate.content.parts {
                 for part in parts {
                     match part {
-                        Part::Text { text, thought, thought_signature: _ } => {
+                        Part::Text {
+                            text,
+                            thought,
+                            thought_signature: _,
+                        } => {
                             if *thought == Some(true) {
                                 *had_thinking = true;
                                 thinking_text.push_str(text);
@@ -221,12 +233,19 @@ impl GeminiHandler {
                                     .await?;
                             }
                         }
-                        Part::FunctionCall { function_call, thought_signature } => {
+                        Part::FunctionCall {
+                            function_call,
+                            thought_signature,
+                        } => {
                             let tool_id = uuid::Uuid::new_v4().to_string();
                             self.sender
                                 .send(HandlerToLooperMessage::ToolCallPending(tool_id.clone()))
                                 .await?;
-                            function_calls.push((function_call.clone(), thought_signature.clone(), tool_id));
+                            function_calls.push((
+                                function_call.clone(),
+                                thought_signature.clone(),
+                                tool_id,
+                            ));
                         }
                         _ => {}
                     }
