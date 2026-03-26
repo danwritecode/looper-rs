@@ -5,11 +5,10 @@ use async_openai::{
     config::OpenAIConfig,
     types::chat::{
         ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
-        ChatCompletionRequestAssistantMessage,
-        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessageArgs,
-        ChatCompletionTools, CreateChatCompletionRequestArgs, FinishReason,
-        ReasoningEffort,
+        ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
+        ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestToolMessage,
+        ChatCompletionRequestUserMessageArgs, ChatCompletionTools, CreateChatCompletionRequestArgs,
+        FinishReason, ReasoningEffort,
     },
 };
 
@@ -22,9 +21,14 @@ use tokio::task::JoinSet;
 
 use serde_json::Value;
 
-use crate::{services::StreamingChatHandler, tools::LooperTools, types::{
-    HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition, MessageHistory,
-}};
+use crate::{
+    services::StreamingChatHandler,
+    tools::LooperTools,
+    types::{
+        HandlerToLooperMessage, HandlerToLooperToolCallRequest, LooperToolDefinition,
+        MessageHistory,
+    },
+};
 
 pub struct OpenAIChatHandler {
     client: Client<OpenAIConfig>,
@@ -59,10 +63,7 @@ impl OpenAIChatHandler {
     }
 
     #[async_recursion]
-    async fn inner_send_message(
-        &mut self,
-        tools_runner: Arc<dyn LooperTools>,
-    ) -> Result<String> {
+    async fn inner_send_message(&mut self, tools_runner: Arc<dyn LooperTools>) -> Result<String> {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.model)
             .max_completion_tokens(50000u32)
@@ -117,7 +118,9 @@ impl OpenAIChatHandler {
                                 }
 
                                 self.sender
-                                    .send(HandlerToLooperMessage::ToolCallPending(tool_calls[index].id.clone()))
+                                    .send(HandlerToLooperMessage::ToolCallPending(
+                                        tool_calls[index].id.clone(),
+                                    ))
                                     .await?;
                             }
                         }
@@ -139,8 +142,9 @@ impl OpenAIChatHandler {
                                 let tr = tools_runner.clone();
                                 let tc_id = tool_call.id.clone();
                                 let tc_name = tool_call.function.name.clone();
-                                let tc_args: Value = serde_json::from_str(&tool_call.function.arguments)
-                                    .unwrap_or_default();
+                                let tc_args: Value =
+                                    serde_json::from_str(&tool_call.function.arguments)
+                                        .unwrap_or_default();
 
                                 tool_join_set.spawn(async move {
                                     let result = tr.run_tool(tc_name, tc_args).await;
@@ -175,7 +179,9 @@ impl OpenAIChatHandler {
                 match result {
                     Ok((tool_call_id, response)) => {
                         self.sender
-                            .send(HandlerToLooperMessage::ToolCallComplete(tool_call_id.clone()))
+                            .send(HandlerToLooperMessage::ToolCallComplete(
+                                tool_call_id.clone(),
+                            ))
                             .await?;
 
                         self.messages.push(
@@ -185,9 +191,12 @@ impl OpenAIChatHandler {
                             }
                             .into(),
                         );
-                    },
+                    }
                     Err(e) => {
-                        eprintln!("Join Error occured when collecting tool call results | Error: {}", e);
+                        eprintln!(
+                            "Join Error occured when collecting tool call results | Error: {}",
+                            e
+                        );
                     }
                 }
             }

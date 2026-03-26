@@ -1,15 +1,23 @@
-use std::{collections::HashMap, error::Error, io::{self, Write}, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    error::Error,
+    io::{self, Write},
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use console::{Style, Term};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{Value, json};
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{Mutex, Notify, mpsc};
 
 use looper::{
-    looper::Looper, looper_stream::LooperStream, tools::{LooperTool, LooperTools}, types::{Handlers, LooperToInterfaceMessage, LooperToolDefinition}
+    looper::Looper,
+    looper_stream::LooperStream,
+    tools::{LooperTool, LooperTools},
+    types::{Handlers, LooperToInterfaceMessage, LooperToolDefinition},
 };
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -45,34 +53,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let turn_done = Arc::new(Notify::new());
     let turn_done_tx = turn_done.clone();
 
-    tokio::spawn(async move{
+    tokio::spawn(async move {
         let theme = Theme::default();
         let mut spinner: Option<ProgressBar> = None;
 
         while let Some(message) = rx.recv().await {
-            if let Some(sp) = spinner.take() { sp.finish_and_clear(); }
+            if let Some(sp) = spinner.take() {
+                sp.finish_and_clear();
+            }
 
             match message {
                 LooperToInterfaceMessage::Assistant(m) => {
                     print!("{}", m);
                     io::stdout().flush().ok();
-                },
+                }
                 LooperToInterfaceMessage::Thinking(m) => {
                     print!("{}", theme.thinking.apply_to(&m));
                     io::stdout().flush().ok();
-                },
+                }
                 LooperToInterfaceMessage::ThinkingComplete => {
                     println!();
-                },
+                }
                 LooperToInterfaceMessage::ToolCall(name) => {
                     spinner = Some(theme.tool_spinner(&name));
-                },
+                }
                 LooperToInterfaceMessage::ToolCallPending(_id) => {
                     // TODO: Implement intelligent swap of tool calls based on id
-                },
+                }
                 LooperToInterfaceMessage::ToolCallComplete(_id) => {
                     // TODO: Handle tool call completion
-                },
+                }
                 LooperToInterfaceMessage::TurnComplete => {
                     println!("\n{}", theme.separator_line());
                     turn_done_tx.notify_one();
@@ -93,14 +103,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-
 // ── Tool implementations ────────────────────────────────────────────
 
 struct ReadFileTool;
 
 #[async_trait]
 impl LooperTool for ReadFileTool {
-    fn get_tool_name(&self) -> String { "read_file".to_string() }
+    fn get_tool_name(&self) -> String {
+        "read_file".to_string()
+    }
 
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
@@ -128,7 +139,9 @@ struct WriteFileTool;
 
 #[async_trait]
 impl LooperTool for WriteFileTool {
-    fn get_tool_name(&self) -> String { "write_file".to_string() }
+    fn get_tool_name(&self) -> String {
+        "write_file".to_string()
+    }
 
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
@@ -161,7 +174,9 @@ struct ListDirectoryTool;
 
 #[async_trait]
 impl LooperTool for ListDirectoryTool {
-    fn get_tool_name(&self) -> String { "list_directory".to_string() }
+    fn get_tool_name(&self) -> String {
+        "list_directory".to_string()
+    }
 
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
@@ -183,7 +198,11 @@ impl LooperTool for ListDirectoryTool {
                 let mut items = Vec::new();
                 while let Ok(Some(entry)) = entries.next_entry().await {
                     let name = entry.file_name().to_string_lossy().to_string();
-                    let is_dir = entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false);
+                    let is_dir = entry
+                        .file_type()
+                        .await
+                        .map(|ft| ft.is_dir())
+                        .unwrap_or(false);
                     if is_dir {
                         items.push(format!("{}/", name));
                     } else {
@@ -202,7 +221,9 @@ struct GrepTool;
 
 #[async_trait]
 impl LooperTool for GrepTool {
-    fn get_tool_name(&self) -> String { "grep".to_string() }
+    fn get_tool_name(&self) -> String {
+        "grep".to_string()
+    }
 
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
@@ -246,7 +267,9 @@ struct FindFilesTool;
 
 #[async_trait]
 impl LooperTool for FindFilesTool {
-    fn get_tool_name(&self) -> String { "find_files".to_string() }
+    fn get_tool_name(&self) -> String {
+        "find_files".to_string()
+    }
 
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
@@ -290,10 +313,19 @@ impl ToolSet {
     fn new() -> Self {
         let mut tools: HashMap<String, Mutex<Arc<dyn LooperTool>>> = HashMap::new();
         tools.insert("read_file".to_string(), Mutex::new(Arc::new(ReadFileTool)));
-        tools.insert("write_file".to_string(), Mutex::new(Arc::new(WriteFileTool)));
-        tools.insert("list_directory".to_string(), Mutex::new(Arc::new(ListDirectoryTool)));
+        tools.insert(
+            "write_file".to_string(),
+            Mutex::new(Arc::new(WriteFileTool)),
+        );
+        tools.insert(
+            "list_directory".to_string(),
+            Mutex::new(Arc::new(ListDirectoryTool)),
+        );
         tools.insert("grep".to_string(), Mutex::new(Arc::new(GrepTool)));
-        tools.insert("find_files".to_string(), Mutex::new(Arc::new(FindFilesTool)));
+        tools.insert(
+            "find_files".to_string(),
+            Mutex::new(Arc::new(FindFilesTool)),
+        );
         ToolSet { tools }
     }
 }
@@ -322,13 +354,11 @@ impl LooperTools for ToolSet {
                 let mut arc = tool_mutex.lock().await;
                 let tool = Arc::get_mut(&mut arc).expect("tool has multiple references");
                 tool.execute(&args).await
-            },
+            }
             None => json!({"error": format!("Unknown function: {}", name)}),
         }
     }
 }
-
-
 
 // ── CLI STYLING ────────────────────────────────────────────────────────
 struct Theme {
@@ -356,14 +386,15 @@ impl Theme {
     }
 
     fn separator_line(&self) -> String {
-        self.separator.apply_to("────────────────────────────────").to_string()
+        self.separator
+            .apply_to("────────────────────────────────")
+            .to_string()
     }
 
     fn tool_spinner(&self, name: &str) -> ProgressBar {
         let sp = ProgressBar::new_spinner();
         sp.set_style(
-            ProgressStyle::default_spinner()
-                .tick_strings(&["▖", "▘", "▝", "▗", "▚", "▞", ""])
+            ProgressStyle::default_spinner().tick_strings(&["▖", "▘", "▝", "▗", "▚", "▞", ""]),
         );
         sp.set_message(self.tool_spinner.apply_to(name).to_string());
         sp.enable_steady_tick(Duration::from_millis(80));

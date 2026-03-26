@@ -3,10 +3,13 @@ use std::sync::Arc;
 use async_openai::{
     Client,
     config::OpenAIConfig,
-    types::{chat::ReasoningEffort, responses::{
-        CreateResponseArgs, FunctionCallOutput, FunctionCallOutputItemParam,
-        InputItem, InputParam, Item, OutputItem, Reasoning, ReasoningSummary, Tool,
-    }},
+    types::{
+        chat::ReasoningEffort,
+        responses::{
+            CreateResponseArgs, FunctionCallOutput, FunctionCallOutputItemParam, InputItem,
+            InputParam, Item, OutputItem, Reasoning, ReasoningSummary, Tool,
+        },
+    },
 };
 
 use async_recursion::async_recursion;
@@ -92,7 +95,9 @@ impl OpenAIResponsesNonStreamingHandler {
                 }
                 OutputItem::Message(m) => {
                     for content in &m.content {
-                        if let async_openai::types::responses::OutputMessageContent::OutputText(t) = content {
+                        if let async_openai::types::responses::OutputMessageContent::OutputText(t) =
+                            content
+                        {
                             text = Some(t.text.clone());
                         }
                     }
@@ -115,8 +120,8 @@ impl OpenAIResponsesNonStreamingHandler {
             for fc in function_calls {
                 let tr = tr.clone();
                 tool_join_set.spawn(async move {
-                    let args: serde_json::Value = serde_json::from_str(&fc.arguments)
-                        .unwrap_or_default();
+                    let args: serde_json::Value =
+                        serde_json::from_str(&fc.arguments).unwrap_or_default();
                     let result = tr.run_tool(fc.name.clone(), args.clone()).await;
 
                     (result, fc, args)
@@ -141,9 +146,12 @@ impl OpenAIResponsesNonStreamingHandler {
                                 status: None,
                             },
                         )));
-                    },
+                    }
                     Err(e) => {
-                        eprintln!("Join Error occured when collecting tool call results | Error: {}", e);
+                        eprintln!(
+                            "Join Error occured when collecting tool call results | Error: {}",
+                            e
+                        );
                     }
                 }
             }
@@ -190,9 +198,8 @@ impl ChatHandler for OpenAIResponsesNonStreamingHandler {
 
         let final_text = steps.iter().rev().find_map(|s| s.text.clone());
 
-        let message_history = MessageHistory::ResponseId(
-            self.previous_response_id.clone().unwrap_or_default(),
-        );
+        let message_history =
+            MessageHistory::ResponseId(self.previous_response_id.clone().unwrap_or_default());
 
         Ok(TurnResult {
             steps,

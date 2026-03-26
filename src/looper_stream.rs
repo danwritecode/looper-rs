@@ -5,22 +5,14 @@ use std::time::Duration;
 use crate::{
     looper::Looper,
     services::{
-        StreamingChatHandler, anthropic::AnthropicHandler,
-        gemini::GeminiHandler,
-        openai_completions::OpenAIChatHandler, openai_responses::OpenAIResponsesHandler
+        StreamingChatHandler, anthropic::AnthropicHandler, gemini::GeminiHandler,
+        openai_completions::OpenAIChatHandler, openai_responses::OpenAIResponsesHandler,
     },
-    tools::{
-        EmptyToolSet, LooperTools, SubAgentTool
-    },
-    types::{
-        HandlerToLooperMessage,
-        Handlers,
-        LooperToInterfaceMessage,
-        MessageHistory
-    }
+    tools::{EmptyToolSet, LooperTools, SubAgentTool},
+    types::{HandlerToLooperMessage, Handlers, LooperToInterfaceMessage, MessageHistory},
 };
 use anyhow::Result;
-use tera::{Tera, Context};
+use tera::{Context, Tera};
 use tokio::sync::mpsc::{self, Sender};
 
 const BUFFER_DRAIN_INTERVAL_MS: u64 = 5;
@@ -85,7 +77,7 @@ impl<'a> LooperStreamBuilder<'a> {
             Handlers::OpenAICompletions(m) => {
                 let mut handler = OpenAIChatHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -98,11 +90,11 @@ impl<'a> LooperStreamBuilder<'a> {
                 }
 
                 Box::new(handler)
-            },
+            }
             Handlers::OpenAIResponses(m) => {
                 let mut handler = OpenAIResponsesHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -115,11 +107,11 @@ impl<'a> LooperStreamBuilder<'a> {
                 }
 
                 Box::new(handler)
-            },
+            }
             Handlers::Anthropic(m) => {
                 let mut handler = AnthropicHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -136,7 +128,7 @@ impl<'a> LooperStreamBuilder<'a> {
             Handlers::Gemini(m) => {
                 let mut handler = GeminiHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -159,7 +151,8 @@ impl<'a> LooperStreamBuilder<'a> {
             tokio::spawn(async move {
                 if buffered {
                     let mut pool: VecDeque<char> = VecDeque::new();
-                    let mut interval = tokio::time::interval(Duration::from_millis(BUFFER_DRAIN_INTERVAL_MS));
+                    let mut interval =
+                        tokio::time::interval(Duration::from_millis(BUFFER_DRAIN_INTERVAL_MS));
                     let mut channel_open = true;
                     loop {
                         tokio::select! {
@@ -191,10 +184,18 @@ impl<'a> LooperStreamBuilder<'a> {
                     while let Some(message) = handler_looper_receiver.recv().await {
                         match message {
                             HandlerToLooperMessage::Assistant(m) => {
-                                if l_i_s.send(LooperToInterfaceMessage::Assistant(m)).await.is_err() { break; }
+                                if l_i_s
+                                    .send(LooperToInterfaceMessage::Assistant(m))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
                             }
                             other => {
-                                if forward_non_text(&l_i_s, other).await.is_err() { break; }
+                                if forward_non_text(&l_i_s, other).await.is_err() {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -203,8 +204,16 @@ impl<'a> LooperStreamBuilder<'a> {
         }
 
         match self.tools {
-            Some(t) => Ok(LooperStream { handler, message_history: self.message_history, tools: Arc::from(t) }),
-            None => Ok(LooperStream { handler, message_history: self.message_history, tools: Arc::new(EmptyToolSet) })
+            Some(t) => Ok(LooperStream {
+                handler,
+                message_history: self.message_history,
+                tools: Arc::from(t),
+            }),
+            None => Ok(LooperStream {
+                handler,
+                message_history: self.message_history,
+                tools: Arc::new(EmptyToolSet),
+            }),
         }
     }
 }
@@ -223,11 +232,10 @@ impl LooperStream {
     }
 
     pub async fn send(&mut self, message: &str) -> Result<MessageHistory> {
-        let history = self.handler.send_message(
-            self.message_history.clone(), 
-            message,
-            self.tools.clone()
-        ).await?;
+        let history = self
+            .handler
+            .send_message(self.message_history.clone(), message, self.tools.clone())
+            .await?;
 
         self.message_history = Some(history.clone());
 
@@ -235,22 +243,36 @@ impl LooperStream {
     }
 }
 
-async fn drain_pool(sender: &Sender<LooperToInterfaceMessage>, pool: &mut VecDeque<char>) -> Result<()> {
+async fn drain_pool(
+    sender: &Sender<LooperToInterfaceMessage>,
+    pool: &mut VecDeque<char>,
+) -> Result<()> {
     let text: String = pool.drain(..).collect();
     if !text.is_empty() {
-        sender.send(LooperToInterfaceMessage::Assistant(text)).await?;
+        sender
+            .send(LooperToInterfaceMessage::Assistant(text))
+            .await?;
     }
     Ok(())
 }
 
-async fn forward_non_text(sender: &Sender<LooperToInterfaceMessage>, msg: HandlerToLooperMessage) -> Result<()> {
+async fn forward_non_text(
+    sender: &Sender<LooperToInterfaceMessage>,
+    msg: HandlerToLooperMessage,
+) -> Result<()> {
     let interface_msg = match msg {
         HandlerToLooperMessage::Assistant(_) => unreachable!("Assistant handled separately"),
         HandlerToLooperMessage::Thinking(m) => LooperToInterfaceMessage::Thinking(m),
         HandlerToLooperMessage::ThinkingComplete => LooperToInterfaceMessage::ThinkingComplete,
-        HandlerToLooperMessage::ToolCallPending(id) => LooperToInterfaceMessage::ToolCallPending(id),
-        HandlerToLooperMessage::ToolCallRequest(tc) => LooperToInterfaceMessage::ToolCall(tc.name.clone()),
-        HandlerToLooperMessage::ToolCallComplete(id) => LooperToInterfaceMessage::ToolCallComplete(id),
+        HandlerToLooperMessage::ToolCallPending(id) => {
+            LooperToInterfaceMessage::ToolCallPending(id)
+        }
+        HandlerToLooperMessage::ToolCallRequest(tc) => {
+            LooperToInterfaceMessage::ToolCall(tc.name.clone())
+        }
+        HandlerToLooperMessage::ToolCallComplete(id) => {
+            LooperToInterfaceMessage::ToolCallComplete(id)
+        }
         HandlerToLooperMessage::TurnComplete => LooperToInterfaceMessage::TurnComplete,
     };
     sender.send(interface_msg).await?;
@@ -258,9 +280,9 @@ async fn forward_non_text(sender: &Sender<LooperToInterfaceMessage>, msg: Handle
 }
 
 fn render_system_message(
-    template: &str, 
+    template: &str,
     instructions: Option<&str>,
-    sub_agent_enabled: bool
+    sub_agent_enabled: bool,
 ) -> Result<String> {
     let mut tera = Tera::default();
     tera.add_raw_template("system_prompt", template)?;
@@ -277,9 +299,10 @@ fn render_system_message(
     Ok(tera.render("system_prompt", &ctx)?)
 }
 
-fn get_system_message(
-    instructions: Option<&str>,
-    sub_agent_enabled: bool
-) -> Result<String> {
-    render_system_message(include_str!("../prompts/system_prompt.txt"), instructions, sub_agent_enabled)
+fn get_system_message(instructions: Option<&str>, sub_agent_enabled: bool) -> Result<String> {
+    render_system_message(
+        include_str!("../prompts/system_prompt.txt"),
+        instructions,
+        sub_agent_enabled,
+    )
 }

@@ -1,23 +1,20 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use tera::{Tera, Context};
+use tera::{Context, Tera};
 
 use crate::{
     services::{
-        ChatHandler, handlers::{
+        ChatHandler,
+        handlers::{
             anthropic_non_streaming::AnthropicNonStreamingHandler,
             gemini_non_streaming::GeminiNonStreamingHandler,
             openai_completions_non_streaming::OpenAINonStreamingChatHandler,
-            openai_responses_non_streaming::OpenAIResponsesNonStreamingHandler
-        }
+            openai_responses_non_streaming::OpenAIResponsesNonStreamingHandler,
+        },
     },
-    tools::{
-        EmptyToolSet, LooperTools, SubAgentTool
-    },
-    types::{
-        Handlers, MessageHistory, turn::TurnResult
-    },
+    tools::{EmptyToolSet, LooperTools, SubAgentTool},
+    types::{Handlers, MessageHistory, turn::TurnResult},
 };
 
 pub struct Looper {
@@ -66,7 +63,7 @@ impl<'a> LooperBuilder<'a> {
         let handler: Box<dyn ChatHandler> = match self.handler_type {
             Handlers::Anthropic(m) => {
                 let mut handler = AnthropicNonStreamingHandler::new(
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -82,7 +79,7 @@ impl<'a> LooperBuilder<'a> {
             }
             Handlers::OpenAICompletions(m) => {
                 let mut handler = OpenAINonStreamingChatHandler::new(
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -98,7 +95,7 @@ impl<'a> LooperBuilder<'a> {
             }
             Handlers::OpenAIResponses(m) => {
                 let mut handler = OpenAIResponsesNonStreamingHandler::new(
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -114,7 +111,7 @@ impl<'a> LooperBuilder<'a> {
             }
             Handlers::Gemini(m) => {
                 let mut handler = GeminiNonStreamingHandler::new(
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -131,8 +128,16 @@ impl<'a> LooperBuilder<'a> {
         };
 
         match self.tools {
-            Some(t) => Ok(Looper { handler, message_history: self.message_history, tools: Arc::from(t) }),
-            None => Ok(Looper { handler, message_history: self.message_history, tools: Arc::new(EmptyToolSet) })
+            Some(t) => Ok(Looper {
+                handler,
+                message_history: self.message_history,
+                tools: Arc::from(t),
+            }),
+            None => Ok(Looper {
+                handler,
+                message_history: self.message_history,
+                tools: Arc::new(EmptyToolSet),
+            }),
         }
     }
 }
@@ -151,11 +156,7 @@ impl Looper {
     pub async fn send(&mut self, message: &str) -> Result<TurnResult> {
         let result = self
             .handler
-            .send_message(
-                self.message_history.clone(),
-                message,
-                self.tools.clone(),
-            )
+            .send_message(self.message_history.clone(), message, self.tools.clone())
             .await?;
 
         self.message_history = Some(result.message_history.clone());
@@ -165,9 +166,9 @@ impl Looper {
 }
 
 fn render_system_message(
-    template: &str, 
+    template: &str,
     instructions: Option<&str>,
-    sub_agent_enabled: bool
+    sub_agent_enabled: bool,
 ) -> Result<String> {
     let mut tera = Tera::default();
     tera.add_raw_template("system_prompt", template)?;
@@ -184,9 +185,10 @@ fn render_system_message(
     Ok(tera.render("system_prompt", &ctx)?)
 }
 
-fn get_system_message(
-    instructions: Option<&str>,
-    sub_agent_enabled: bool
-) -> Result<String> {
-    render_system_message(include_str!("../prompts/system_prompt.txt"), instructions, sub_agent_enabled)
+fn get_system_message(instructions: Option<&str>, sub_agent_enabled: bool) -> Result<String> {
+    render_system_message(
+        include_str!("../prompts/system_prompt.txt"),
+        instructions,
+        sub_agent_enabled,
+    )
 }
