@@ -41,14 +41,11 @@ println!("{}", result.final_text.unwrap());
 
 ### Streaming
 
-Forwards events (text deltas, thinking, tool calls) over an `mpsc` channel as they arrive. Wire up the receiver to your UI.
+Forwards events (text deltas, thinking, tool calls) over an `mpsc` channel as they arrive. `build()` returns a `(LooperStream, Receiver)` tuple — wire up the receiver to your UI.
 
 ```rust
-let (tx, mut rx) = mpsc::channel(10000);
-
-let mut looper = LooperStream::builder(Handlers::Anthropic("claude-sonnet-4-6"))
+let (mut looper, mut rx) = LooperStream::builder(Handlers::Anthropic("claude-sonnet-4-6"))
     .tools(tools)
-    .interface_sender(tx)
     .instructions("Be helpful.")
     .build()
     .await?;
@@ -84,7 +81,6 @@ Both `Looper` and `LooperStream` share these builder methods:
 
 | Method | Description |
 |---|---|
-| `.interface_sender(Sender)` | Channel for UI events |
 | `.buffered_output()` | Smooth char-by-char text rendering instead of raw deltas |
 
 ### Supported Handlers Examples
