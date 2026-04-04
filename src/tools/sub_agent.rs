@@ -16,7 +16,9 @@ impl SubAgentTool {
 
 #[async_trait]
 impl LooperTool for SubAgentTool {
-    fn get_tool_name(&self) -> String { "spawn_sub_agent".to_string() }
+    fn get_tool_name(&self) -> String {
+        "spawn_sub_agent".to_string()
+    }
 
     fn tool(&self) -> LooperToolDefinition {
         LooperToolDefinition::default()
@@ -37,15 +39,15 @@ impl LooperTool for SubAgentTool {
     }
 
     async fn execute(&mut self, args: &Value) -> Value {
-        let Some(task_description) = args["task_description"]
-            .as_str()
-        else {
+        let Some(task_description) = args["task_description"].as_str() else {
             return json!({ "error": "Missing 'task_description' argument" });
         };
 
-        let result = match self.looper.send(&task_description).await {
+        let result = match self.looper.send(task_description).await {
             Ok(r) => r,
-            Err(e) => return json!({ "error": format!("An error occured when sending message | Error: {}", e) })
+            Err(e) => {
+                return json!({ "error": format!("An error occured when sending message | Error: {}", e) });
+            }
         };
 
         match &result.final_text {

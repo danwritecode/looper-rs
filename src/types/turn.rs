@@ -1,5 +1,5 @@
-use serde_json::Value;
 use super::MessageHistory;
+use serde_json::Value;
 
 pub struct ThinkingBlock {
     pub content: String,

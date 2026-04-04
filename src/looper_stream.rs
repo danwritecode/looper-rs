@@ -5,23 +5,15 @@ use std::time::Duration;
 use crate::{
     looper::Looper,
     services::{
-        StreamingChatHandler, anthropic::AnthropicHandler,
-        gemini::GeminiHandler,
-        openai_completions::OpenAIChatHandler, openai_responses::OpenAIResponsesHandler
+        StreamingChatHandler, anthropic::AnthropicHandler, gemini::GeminiHandler,
+        openai_completions::OpenAIChatHandler, openai_responses::OpenAIResponsesHandler,
     },
-    tools::{
-        EmptyToolSet, LooperTools, SubAgentTool
-    },
-    types::{
-        HandlerToLooperMessage,
-        Handlers,
-        LooperToInterfaceMessage,
-        MessageHistory
-    }
+    tools::{EmptyToolSet, LooperTools, SubAgentTool},
+    types::{HandlerToLooperMessage, Handlers, LooperToInterfaceMessage, MessageHistory},
 };
 use anyhow::Result;
-use tera::{Tera, Context};
-use tokio::sync::mpsc::{self, Sender};
+use tera::{Context, Tera};
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 const BUFFER_DRAIN_INTERVAL_MS: u64 = 5;
 
@@ -36,7 +28,6 @@ pub struct LooperStreamBuilder<'a> {
     message_history: Option<MessageHistory>,
     tools: Option<Box<dyn LooperTools>>,
     instructions: Option<String>,
-    interface_sender: Option<Sender<LooperToInterfaceMessage>>,
     sub_agent: Option<Looper>,
     buffered_output: bool,
 }
@@ -67,25 +58,21 @@ impl<'a> LooperStreamBuilder<'a> {
         self
     }
 
-    pub fn interface_sender(mut self, sender: Sender<LooperToInterfaceMessage>) -> Self {
-        self.interface_sender = Some(sender);
-        self
-    }
-
     pub fn buffered_output(mut self) -> Self {
         self.buffered_output = true;
         self
     }
 
-    pub async fn build(mut self) -> Result<LooperStream> {
+    pub async fn build(mut self) -> Result<(LooperStream, Receiver<LooperToInterfaceMessage>)> {
         let sub_agent_enabled = self.sub_agent.is_some();
         let (handler_looper_sender, mut handler_looper_receiver) = mpsc::channel(10000);
+        let (looper_ui_sender, looper_ui_receiver) = mpsc::channel(10000);
 
         let handler: Box<dyn StreamingChatHandler> = match self.handler_type {
             Handlers::OpenAICompletions(m) => {
                 let mut handler = OpenAIChatHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -98,11 +85,11 @@ impl<'a> LooperStreamBuilder<'a> {
                 }
 
                 Box::new(handler)
-            },
+            }
             Handlers::OpenAIResponses(m) => {
                 let mut handler = OpenAIResponsesHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -115,11 +102,11 @@ impl<'a> LooperStreamBuilder<'a> {
                 }
 
                 Box::new(handler)
-            },
+            }
             Handlers::Anthropic(m) => {
                 let mut handler = AnthropicHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -136,7 +123,7 @@ impl<'a> LooperStreamBuilder<'a> {
             Handlers::Gemini(m) => {
                 let mut handler = GeminiHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -154,57 +141,78 @@ impl<'a> LooperStreamBuilder<'a> {
 
         // Spawn a single long-lived listener task that forwards messages
         // from the handler to the interface and executes tool calls.
-        if let Some(l_i_s) = self.interface_sender {
-            let buffered = self.buffered_output;
-            tokio::spawn(async move {
-                if buffered {
-                    let mut pool: VecDeque<char> = VecDeque::new();
-                    let mut interval = tokio::time::interval(Duration::from_millis(BUFFER_DRAIN_INTERVAL_MS));
-                    let mut channel_open = true;
-                    loop {
-                        tokio::select! {
-                            biased;
-                            msg = handler_looper_receiver.recv(), if channel_open => {
-                                match msg {
-                                    Some(HandlerToLooperMessage::Assistant(m)) => {
-                                        pool.extend(m.chars());
-                                    }
-                                    Some(other) => {
-                                        if drain_pool(&l_i_s, &mut pool).await.is_err() { break; }
-                                        if forward_non_text(&l_i_s, other).await.is_err() { break; }
-                                    }
-                                    None => {
-                                        channel_open = false;
-                                    }
+        let buffered = self.buffered_output;
+        tokio::spawn(async move {
+            if buffered {
+                let mut pool: VecDeque<char> = VecDeque::new();
+                let mut interval =
+                    tokio::time::interval(Duration::from_millis(BUFFER_DRAIN_INTERVAL_MS));
+                let mut channel_open = true;
+                loop {
+                    tokio::select! {
+                        biased;
+                        msg = handler_looper_receiver.recv(), if channel_open => {
+                            match msg {
+                                Some(HandlerToLooperMessage::Assistant(m)) => {
+                                    pool.extend(m.chars());
                                 }
-                            }
-                            _ = interval.tick() => {
-                                if let Some(c) = pool.pop_front() {
-                                    if l_i_s.send(LooperToInterfaceMessage::Assistant(c.to_string())).await.is_err() { break; }
-                                } else if !channel_open {
-                                    break;
+                                Some(other) => {
+                                    if drain_pool(&looper_ui_sender, &mut pool).await.is_err() { break; }
+                                    if forward_non_text(&looper_ui_sender, other).await.is_err() { break; }
+                                }
+                                None => {
+                                    channel_open = false;
                                 }
                             }
                         }
-                    }
-                } else {
-                    while let Some(message) = handler_looper_receiver.recv().await {
-                        match message {
-                            HandlerToLooperMessage::Assistant(m) => {
-                                if l_i_s.send(LooperToInterfaceMessage::Assistant(m)).await.is_err() { break; }
-                            }
-                            other => {
-                                if forward_non_text(&l_i_s, other).await.is_err() { break; }
+                        _ = interval.tick() => {
+                            if let Some(c) = pool.pop_front() {
+                                if looper_ui_sender.send(LooperToInterfaceMessage::Assistant(c.to_string())).await.is_err() { break; }
+                            } else if !channel_open {
+                                break;
                             }
                         }
                     }
                 }
-            });
-        }
+            } else {
+                while let Some(message) = handler_looper_receiver.recv().await {
+                    match message {
+                        HandlerToLooperMessage::Assistant(m) => {
+                            if looper_ui_sender
+                                .send(LooperToInterfaceMessage::Assistant(m))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                        other => {
+                            if forward_non_text(&looper_ui_sender, other).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
         match self.tools {
-            Some(t) => Ok(LooperStream { handler, message_history: self.message_history, tools: Arc::from(t) }),
-            None => Ok(LooperStream { handler, message_history: self.message_history, tools: Arc::new(EmptyToolSet) })
+            Some(t) => {
+                let ls = LooperStream {
+                    handler,
+                    message_history: self.message_history,
+                    tools: Arc::from(t),
+                };
+                Ok((ls, looper_ui_receiver))
+            }
+            None => {
+                let ls = LooperStream {
+                    handler,
+                    message_history: self.message_history,
+                    tools: Arc::new(EmptyToolSet),
+                };
+                Ok((ls, looper_ui_receiver))
+            }
         }
     }
 }
@@ -217,17 +225,16 @@ impl LooperStream {
             tools: None,
             sub_agent: None,
             instructions: None,
-            interface_sender: None,
+            // interface_sender: None,
             buffered_output: false,
         }
     }
 
     pub async fn send(&mut self, message: &str) -> Result<MessageHistory> {
-        let history = self.handler.send_message(
-            self.message_history.clone(), 
-            message,
-            self.tools.clone()
-        ).await?;
+        let history = self
+            .handler
+            .send_message(self.message_history.clone(), message, self.tools.clone())
+            .await?;
 
         self.message_history = Some(history.clone());
 
@@ -235,22 +242,36 @@ impl LooperStream {
     }
 }
 
-async fn drain_pool(sender: &Sender<LooperToInterfaceMessage>, pool: &mut VecDeque<char>) -> Result<()> {
+async fn drain_pool(
+    sender: &Sender<LooperToInterfaceMessage>,
+    pool: &mut VecDeque<char>,
+) -> Result<()> {
     let text: String = pool.drain(..).collect();
     if !text.is_empty() {
-        sender.send(LooperToInterfaceMessage::Assistant(text)).await?;
+        sender
+            .send(LooperToInterfaceMessage::Assistant(text))
+            .await?;
     }
     Ok(())
 }
 
-async fn forward_non_text(sender: &Sender<LooperToInterfaceMessage>, msg: HandlerToLooperMessage) -> Result<()> {
+async fn forward_non_text(
+    sender: &Sender<LooperToInterfaceMessage>,
+    msg: HandlerToLooperMessage,
+) -> Result<()> {
     let interface_msg = match msg {
         HandlerToLooperMessage::Assistant(_) => unreachable!("Assistant handled separately"),
         HandlerToLooperMessage::Thinking(m) => LooperToInterfaceMessage::Thinking(m),
         HandlerToLooperMessage::ThinkingComplete => LooperToInterfaceMessage::ThinkingComplete,
-        HandlerToLooperMessage::ToolCallPending(id) => LooperToInterfaceMessage::ToolCallPending(id),
-        HandlerToLooperMessage::ToolCallRequest(tc) => LooperToInterfaceMessage::ToolCall(tc.name.clone()),
-        HandlerToLooperMessage::ToolCallComplete(id) => LooperToInterfaceMessage::ToolCallComplete(id),
+        HandlerToLooperMessage::ToolCallPending(id) => {
+            LooperToInterfaceMessage::ToolCallPending(id)
+        }
+        HandlerToLooperMessage::ToolCallRequest(tc) => {
+            LooperToInterfaceMessage::ToolCall(tc.name.clone())
+        }
+        HandlerToLooperMessage::ToolCallComplete(id) => {
+            LooperToInterfaceMessage::ToolCallComplete(id)
+        }
         HandlerToLooperMessage::TurnComplete => LooperToInterfaceMessage::TurnComplete,
     };
     sender.send(interface_msg).await?;
@@ -258,9 +279,9 @@ async fn forward_non_text(sender: &Sender<LooperToInterfaceMessage>, msg: Handle
 }
 
 fn render_system_message(
-    template: &str, 
+    template: &str,
     instructions: Option<&str>,
-    sub_agent_enabled: bool
+    sub_agent_enabled: bool,
 ) -> Result<String> {
     let mut tera = Tera::default();
     tera.add_raw_template("system_prompt", template)?;
@@ -277,9 +298,10 @@ fn render_system_message(
     Ok(tera.render("system_prompt", &ctx)?)
 }
 
-fn get_system_message(
-    instructions: Option<&str>,
-    sub_agent_enabled: bool
-) -> Result<String> {
-    render_system_message(include_str!("../prompts/system_prompt.txt"), instructions, sub_agent_enabled)
+fn get_system_message(instructions: Option<&str>, sub_agent_enabled: bool) -> Result<String> {
+    render_system_message(
+        include_str!("../prompts/system_prompt.txt"),
+        instructions,
+        sub_agent_enabled,
+    )
 }

@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use gemini_rust::{
-    Content, FunctionResponse, Gemini, Message, Model, Part, Role, Tool,
-};
+use gemini_rust::{Content, FunctionResponse, Gemini, Message, Model, Part, Role, Tool};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -31,7 +29,9 @@ impl GeminiNonStreamingHandler {
     pub fn new(model: &str, system_message: &str) -> Result<Self> {
         let api_key = std::env::var("GEMINI_API_KEY")
             .or_else(|_| std::env::var("GOOGLE_API_KEY"))
-            .map_err(|_| anyhow::anyhow!("GEMINI_API_KEY or GOOGLE_API_KEY environment variable must be set"))?;
+            .map_err(|_| {
+                anyhow::anyhow!("GEMINI_API_KEY or GOOGLE_API_KEY environment variable must be set")
+            })?;
 
         let model_id = if model.starts_with("models/") {
             Model::Custom(model.to_string())
@@ -54,7 +54,8 @@ impl GeminiNonStreamingHandler {
         tools_runner: Arc<dyn LooperTools>,
         steps: &mut Vec<TurnStep>,
     ) -> Result<()> {
-        let mut builder = self.client
+        let mut builder = self
+            .client
             .generate_content()
             .with_system_prompt(&self.system_message)
             .with_messages(self.messages.clone())
@@ -76,17 +77,22 @@ impl GeminiNonStreamingHandler {
             if let Some(parts) = &candidate.content.parts {
                 for part in parts {
                     match part {
-                        Part::Text { text: t, thought, thought_signature: _ } => {
+                        Part::Text {
+                            text: t,
+                            thought,
+                            thought_signature: _,
+                        } => {
                             if *thought == Some(true) {
-                                thinking.push(ThinkingBlock {
-                                    content: t.clone(),
-                                });
+                                thinking.push(ThinkingBlock { content: t.clone() });
                             } else {
                                 text = Some(t.clone());
                             }
                             assistant_parts.push(part.clone());
                         }
-                        Part::FunctionCall { function_call, thought_signature } => {
+                        Part::FunctionCall {
+                            function_call,
+                            thought_signature,
+                        } => {
                             func_calls.push((function_call.clone(), thought_signature.clone()));
                             assistant_parts.push(part.clone());
                         }
@@ -145,7 +151,10 @@ impl GeminiNonStreamingHandler {
                         });
                     }
                     Err(e) => {
-                        eprintln!("Join Error occured when collecting tool call results | Error: {}", e);
+                        eprintln!(
+                            "Join Error occured when collecting tool call results | Error: {}",
+                            e
+                        );
                     }
                 }
             }
@@ -197,10 +206,7 @@ impl ChatHandler for GeminiNonStreamingHandler {
         let mut steps = Vec::new();
         self.inner_send_message(tools_runner, &mut steps).await?;
 
-        let final_text = steps
-            .iter()
-            .rev()
-            .find_map(|s| s.text.clone());
+        let final_text = steps.iter().rev().find_map(|s| s.text.clone());
 
         let message_history = MessageHistory::Messages(serde_json::to_value(&self.messages)?);
 

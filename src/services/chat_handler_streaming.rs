@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
+use crate::{
+    tools::LooperTools,
+    types::{LooperToolDefinition, MessageHistory},
+};
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::{tools::LooperTools, types::{LooperToolDefinition, MessageHistory}};
 
 #[async_trait]
 pub trait StreamingChatHandler: Send + Sync {

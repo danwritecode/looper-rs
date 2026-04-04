@@ -1,5 +1,5 @@
-use async_openai::types::responses::{FunctionTool, FunctionToolArgs};
 use crate::types::LooperToolDefinition;
+use async_openai::types::responses::{FunctionTool, FunctionToolArgs};
 
 impl From<LooperToolDefinition> for FunctionTool {
     fn from(value: LooperToolDefinition) -> Self {
