@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use console::{Style, Term};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{Value, json};
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{Mutex, Notify};
 
 use looper::{
     looper::Looper, looper_stream::LooperStream, tools::{LooperTool, LooperTools}, types::{Handlers, LooperToInterfaceMessage, LooperToolDefinition}
@@ -21,8 +21,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tools: Box<dyn LooperTools> = Box::new(ToolSet::new());
     let agent_tools: Box<dyn LooperTools> = Box::new(ToolSet::new());
 
-    let (tx, mut rx) = mpsc::channel(10000);
-
     // NOTE: For now, agent_looper doesn't need to stream tokens since the user
     // doesn't directly see it's token stream anyway. Might as well just leave it
     // as non-streaming, unless there is obviously value to changing this.
@@ -37,7 +35,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut looper = LooperStream::builder(Handlers::Gemini("gemini-3-flash-preview"))
         .sub_agent(agent_looper)
         .tools(tools)
-        .interface_sender(tx)
         .instructions("You're being used as a CLI example for an agent loop. Be succinct yet friendly and helpful.")
         .buffered_output()
         .build().await?;
@@ -49,7 +46,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let theme = Theme::default();
         let mut spinner: Option<ProgressBar> = None;
 
-        while let Some(message) = rx.recv().await {
+        while let Some(message) = looper.ui_rx.recv().await {
             if let Some(sp) = spinner.take() { sp.finish_and_clear(); }
 
             match message {
@@ -88,7 +85,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
 
-        looper.send(&input).await?;
+        looper.looper.send(&input).await?;
         turn_done.notified().await;
     }
 }

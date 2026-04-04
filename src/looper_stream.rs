@@ -21,7 +21,7 @@ use crate::{
 };
 use anyhow::Result;
 use tera::{Tera, Context};
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 const BUFFER_DRAIN_INTERVAL_MS: u64 = 5;
 
@@ -36,9 +36,22 @@ pub struct LooperStreamBuilder<'a> {
     message_history: Option<MessageHistory>,
     tools: Option<Box<dyn LooperTools>>,
     instructions: Option<String>,
-    interface_sender: Option<Sender<LooperToInterfaceMessage>>,
     sub_agent: Option<Looper>,
     buffered_output: bool,
+}
+
+pub struct LooperStreamBuild {
+    pub looper: LooperStream,
+    pub ui_rx: Receiver<LooperToInterfaceMessage>
+}
+
+impl LooperStreamBuild {
+    fn new(
+        stream: LooperStream,
+        ui_rx: Receiver<LooperToInterfaceMessage>
+    ) -> Self {
+        LooperStreamBuild { looper: stream, ui_rx }
+    }
 }
 
 impl<'a> LooperStreamBuilder<'a> {
@@ -67,19 +80,15 @@ impl<'a> LooperStreamBuilder<'a> {
         self
     }
 
-    pub fn interface_sender(mut self, sender: Sender<LooperToInterfaceMessage>) -> Self {
-        self.interface_sender = Some(sender);
-        self
-    }
-
     pub fn buffered_output(mut self) -> Self {
         self.buffered_output = true;
         self
     }
 
-    pub async fn build(mut self) -> Result<LooperStream> {
+    pub async fn build(mut self) -> Result<LooperStreamBuild> {
         let sub_agent_enabled = self.sub_agent.is_some();
         let (handler_looper_sender, mut handler_looper_receiver) = mpsc::channel(10000);
+        let (looper_ui_sender, looper_ui_receiver) = mpsc::channel(10000);
 
         let handler: Box<dyn StreamingChatHandler> = match self.handler_type {
             Handlers::OpenAICompletions(m) => {
@@ -154,57 +163,61 @@ impl<'a> LooperStreamBuilder<'a> {
 
         // Spawn a single long-lived listener task that forwards messages
         // from the handler to the interface and executes tool calls.
-        if let Some(l_i_s) = self.interface_sender {
-            let buffered = self.buffered_output;
-            tokio::spawn(async move {
-                if buffered {
-                    let mut pool: VecDeque<char> = VecDeque::new();
-                    let mut interval = tokio::time::interval(Duration::from_millis(BUFFER_DRAIN_INTERVAL_MS));
-                    let mut channel_open = true;
-                    loop {
-                        tokio::select! {
-                            biased;
-                            msg = handler_looper_receiver.recv(), if channel_open => {
-                                match msg {
-                                    Some(HandlerToLooperMessage::Assistant(m)) => {
-                                        pool.extend(m.chars());
-                                    }
-                                    Some(other) => {
-                                        if drain_pool(&l_i_s, &mut pool).await.is_err() { break; }
-                                        if forward_non_text(&l_i_s, other).await.is_err() { break; }
-                                    }
-                                    None => {
-                                        channel_open = false;
-                                    }
+        let buffered = self.buffered_output;
+        tokio::spawn(async move {
+            if buffered {
+                let mut pool: VecDeque<char> = VecDeque::new();
+                let mut interval = tokio::time::interval(Duration::from_millis(BUFFER_DRAIN_INTERVAL_MS));
+                let mut channel_open = true;
+                loop {
+                    tokio::select! {
+                        biased;
+                        msg = handler_looper_receiver.recv(), if channel_open => {
+                            match msg {
+                                Some(HandlerToLooperMessage::Assistant(m)) => {
+                                    pool.extend(m.chars());
                                 }
-                            }
-                            _ = interval.tick() => {
-                                if let Some(c) = pool.pop_front() {
-                                    if l_i_s.send(LooperToInterfaceMessage::Assistant(c.to_string())).await.is_err() { break; }
-                                } else if !channel_open {
-                                    break;
+                                Some(other) => {
+                                    if drain_pool(&looper_ui_sender, &mut pool).await.is_err() { break; }
+                                    if forward_non_text(&looper_ui_sender, other).await.is_err() { break; }
+                                }
+                                None => {
+                                    channel_open = false;
                                 }
                             }
                         }
-                    }
-                } else {
-                    while let Some(message) = handler_looper_receiver.recv().await {
-                        match message {
-                            HandlerToLooperMessage::Assistant(m) => {
-                                if l_i_s.send(LooperToInterfaceMessage::Assistant(m)).await.is_err() { break; }
-                            }
-                            other => {
-                                if forward_non_text(&l_i_s, other).await.is_err() { break; }
+                        _ = interval.tick() => {
+                            if let Some(c) = pool.pop_front() {
+                                if looper_ui_sender.send(LooperToInterfaceMessage::Assistant(c.to_string())).await.is_err() { break; }
+                            } else if !channel_open {
+                                break;
                             }
                         }
                     }
                 }
-            });
-        }
+            } else {
+                while let Some(message) = handler_looper_receiver.recv().await {
+                    match message {
+                        HandlerToLooperMessage::Assistant(m) => {
+                            if looper_ui_sender.send(LooperToInterfaceMessage::Assistant(m)).await.is_err() { break; }
+                        }
+                        other => {
+                            if forward_non_text(&looper_ui_sender, other).await.is_err() { break; }
+                        }
+                    }
+                }
+            }
+        });
 
         match self.tools {
-            Some(t) => Ok(LooperStream { handler, message_history: self.message_history, tools: Arc::from(t) }),
-            None => Ok(LooperStream { handler, message_history: self.message_history, tools: Arc::new(EmptyToolSet) })
+            Some(t) => {
+                let ls = LooperStream { handler, message_history: self.message_history, tools: Arc::from(t) };
+                return Ok(LooperStreamBuild::new(ls, looper_ui_receiver));
+            },
+            None => {
+                let ls = LooperStream { handler, message_history: self.message_history, tools: Arc::new(EmptyToolSet) }; 
+                return Ok(LooperStreamBuild::new(ls, looper_ui_receiver));
+            }
         }
     }
 }
@@ -217,7 +230,7 @@ impl LooperStream {
             tools: None,
             sub_agent: None,
             instructions: None,
-            interface_sender: None,
+            // interface_sender: None,
             buffered_output: false,
         }
     }
