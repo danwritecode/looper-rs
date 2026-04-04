@@ -3,11 +3,14 @@ use std::sync::Arc;
 use async_openai::{
     Client,
     config::OpenAIConfig,
-    types::{chat::ReasoningEffort, responses::{
-        CreateResponseArgs, FunctionCallOutput, FunctionCallOutputItemParam, FunctionToolCall,
-        InputItem, InputParam, Item, OutputItem, Reasoning, ReasoningSummary,
-        ResponseStreamEvent, Tool,
-    }},
+    types::{
+        chat::ReasoningEffort,
+        responses::{
+            CreateResponseArgs, FunctionCallOutput, FunctionCallOutputItemParam, FunctionToolCall,
+            InputItem, InputParam, Item, OutputItem, Reasoning, ReasoningSummary,
+            ResponseStreamEvent, Tool,
+        },
+    },
 };
 
 use async_recursion::async_recursion;
@@ -108,7 +111,9 @@ impl OpenAIResponsesHandler {
                 }
                 Ok(ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(delta)) => {
                     self.sender
-                        .send(HandlerToLooperMessage::ToolCallPending(delta.item_id.clone()))
+                        .send(HandlerToLooperMessage::ToolCallPending(
+                            delta.item_id.clone(),
+                        ))
                         .await?;
                 }
                 Ok(ResponseStreamEvent::ResponseOutputItemDone(item_done)) => {
@@ -126,8 +131,8 @@ impl OpenAIResponsesHandler {
                         let tr = tools_runner.clone();
                         let fc_clone = fc.clone();
                         tool_join_set.spawn(async move {
-                            let args: Value = serde_json::from_str(&fc_clone.arguments)
-                                .unwrap_or_default();
+                            let args: Value =
+                                serde_json::from_str(&fc_clone.arguments).unwrap_or_default();
                             let result = tr.run_tool(fc_clone.name.clone(), args).await;
                             (fc_clone.call_id.clone(), result)
                         });
@@ -168,14 +173,19 @@ impl OpenAIResponsesHandler {
                                 status: None,
                             },
                         )));
-                    },
+                    }
                     Err(e) => {
-                        eprintln!("Join Error occured when collecting tool call results | Error: {}", e);
+                        eprintln!(
+                            "Join Error occured when collecting tool call results | Error: {}",
+                            e
+                        );
                     }
                 }
             }
 
-            return self.inner_send_message(Some(InputParam::Items(input_items)), tools_runner).await;
+            return self
+                .inner_send_message(Some(InputParam::Items(input_items)), tools_runner)
+                .await;
         }
 
         Ok(assistant_res_buf.join(""))

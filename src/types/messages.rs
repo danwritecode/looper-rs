@@ -12,7 +12,7 @@ pub enum HandlerToLooperMessage {
     ToolCallPending(ToolId),
     ToolCallRequest(HandlerToLooperToolCallRequest),
     ToolCallComplete(ToolId),
-    TurnComplete
+    TurnComplete,
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ pub struct HandlerToLooperToolCallRequest {
 #[derive(Debug)]
 pub struct LooperToHandlerToolCallResult {
     pub id: String,
-    pub value: Value
+    pub value: Value,
 }
 
 #[derive(Debug)]
@@ -36,5 +36,5 @@ pub enum LooperToInterfaceMessage {
     ToolCallPending(ToolId),
     ToolCall(Name),
     ToolCallComplete(ToolId),
-    TurnComplete
+    TurnComplete,
 }

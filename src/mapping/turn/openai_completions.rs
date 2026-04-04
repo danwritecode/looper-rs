@@ -1,5 +1,5 @@
-use async_openai::types::chat::ChatChoice;
 use crate::types::turn::TurnStep;
+use async_openai::types::chat::ChatChoice;
 
 impl From<ChatChoice> for TurnStep {
     fn from(choice: ChatChoice) -> Self {

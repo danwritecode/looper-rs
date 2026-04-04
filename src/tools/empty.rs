@@ -3,7 +3,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
-use crate::{tools::{LooperTool, LooperTools}, types::LooperToolDefinition};
+use crate::{
+    tools::{LooperTool, LooperTools},
+    types::LooperToolDefinition,
+};
 
 pub struct EmptyToolSet;
 

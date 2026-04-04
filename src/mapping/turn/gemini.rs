@@ -1,5 +1,5 @@
-use gemini_rust::GenerationResponse;
 use crate::types::turn::{ThinkingBlock, TurnStep};
+use gemini_rust::GenerationResponse;
 
 impl From<GenerationResponse> for TurnStep {
     fn from(response: GenerationResponse) -> Self {
@@ -11,14 +11,11 @@ impl From<GenerationResponse> for TurnStep {
             if let Some(parts) = &candidate.content.parts {
                 for part in parts {
                     if let gemini_rust::Part::Text {
-                        text: t,
-                        thought,
-                        ..
-                    } = part {
+                        text: t, thought, ..
+                    } = part
+                    {
                         if *thought == Some(true) {
-                            thinking.push(ThinkingBlock {
-                                content: t.clone(),
-                            });
+                            thinking.push(ThinkingBlock { content: t.clone() });
                         } else {
                             text = Some(t.clone());
                         }

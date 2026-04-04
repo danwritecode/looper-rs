@@ -1,5 +1,5 @@
-use async_anthropic::types::{CreateMessagesResponse, MessageContent};
 use crate::types::turn::{ThinkingBlock, TurnStep};
+use async_anthropic::types::{CreateMessagesResponse, MessageContent};
 
 impl From<CreateMessagesResponse> for TurnStep {
     fn from(response: CreateMessagesResponse) -> Self {

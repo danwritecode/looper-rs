@@ -4,12 +4,16 @@ use serde_json::{Value, json};
 pub struct LooperToolDefinition {
     pub name: String,
     pub description: String,
-    pub parameters: Value
+    pub parameters: Value,
 }
 
 impl Default for LooperToolDefinition {
     fn default() -> Self {
-        LooperToolDefinition { name: "".to_string(), description: "".to_string(), parameters: json!({}) }
+        LooperToolDefinition {
+            name: "".to_string(),
+            description: "".to_string(),
+            parameters: json!({}),
+        }
     }
 }
 
