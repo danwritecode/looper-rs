@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ")
         .build().await?;
 
-    let mut looper = LooperStream::builder(Handlers::Gemini("gemini-3-flash-preview"))
+    let (mut looper, mut ui_rx) = LooperStream::builder(Handlers::Gemini("gemini-3-flash-preview"))
         .sub_agent(agent_looper)
         .tools(tools)
         .instructions("You're being used as a CLI example for an agent loop. Be succinct yet friendly and helpful.")
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let theme = Theme::default();
         let mut spinner: Option<ProgressBar> = None;
 
-        while let Some(message) = looper.ui_rx.recv().await {
+        while let Some(message) = ui_rx.recv().await {
             if let Some(sp) = spinner.take() {
                 sp.finish_and_clear();
             }
@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
 
-        looper.looper.send(&input).await?;
+        looper.send(&input).await?;
         turn_done.notified().await;
     }
 }

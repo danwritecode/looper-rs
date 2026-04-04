@@ -32,20 +32,6 @@ pub struct LooperStreamBuilder<'a> {
     buffered_output: bool,
 }
 
-pub struct LooperStreamBuild {
-    pub looper: LooperStream,
-    pub ui_rx: Receiver<LooperToInterfaceMessage>,
-}
-
-impl LooperStreamBuild {
-    fn new(stream: LooperStream, ui_rx: Receiver<LooperToInterfaceMessage>) -> Self {
-        LooperStreamBuild {
-            looper: stream,
-            ui_rx,
-        }
-    }
-}
-
 impl<'a> LooperStreamBuilder<'a> {
     pub fn message_history(mut self, history: MessageHistory) -> Self {
         self.message_history = Some(history);
@@ -77,7 +63,7 @@ impl<'a> LooperStreamBuilder<'a> {
         self
     }
 
-    pub async fn build(mut self) -> Result<LooperStreamBuild> {
+    pub async fn build(mut self) -> Result<(LooperStream, Receiver<LooperToInterfaceMessage>)> {
         let sub_agent_enabled = self.sub_agent.is_some();
         let (handler_looper_sender, mut handler_looper_receiver) = mpsc::channel(10000);
         let (looper_ui_sender, looper_ui_receiver) = mpsc::channel(10000);
@@ -217,7 +203,7 @@ impl<'a> LooperStreamBuilder<'a> {
                     message_history: self.message_history,
                     tools: Arc::from(t),
                 };
-                Ok(LooperStreamBuild::new(ls, looper_ui_receiver))
+                Ok((ls, looper_ui_receiver))
             }
             None => {
                 let ls = LooperStream {
@@ -225,7 +211,7 @@ impl<'a> LooperStreamBuilder<'a> {
                     message_history: self.message_history,
                     tools: Arc::new(EmptyToolSet),
                 };
-                Ok(LooperStreamBuild::new(ls, looper_ui_receiver))
+                Ok((ls, looper_ui_receiver))
             }
         }
     }
