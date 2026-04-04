@@ -94,7 +94,7 @@ impl<'a> LooperStreamBuilder<'a> {
             Handlers::OpenAICompletions(m) => {
                 let mut handler = OpenAIChatHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -111,7 +111,7 @@ impl<'a> LooperStreamBuilder<'a> {
             Handlers::OpenAIResponses(m) => {
                 let mut handler = OpenAIResponsesHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -128,7 +128,7 @@ impl<'a> LooperStreamBuilder<'a> {
             Handlers::Anthropic(m) => {
                 let mut handler = AnthropicHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -145,7 +145,7 @@ impl<'a> LooperStreamBuilder<'a> {
             Handlers::Gemini(m) => {
                 let mut handler = GeminiHandler::new(
                     handler_looper_sender,
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -212,11 +212,11 @@ impl<'a> LooperStreamBuilder<'a> {
         match self.tools {
             Some(t) => {
                 let ls = LooperStream { handler, message_history: self.message_history, tools: Arc::from(t) };
-                return Ok(LooperStreamBuild::new(ls, looper_ui_receiver));
+                Ok(LooperStreamBuild::new(ls, looper_ui_receiver))
             },
             None => {
                 let ls = LooperStream { handler, message_history: self.message_history, tools: Arc::new(EmptyToolSet) }; 
-                return Ok(LooperStreamBuild::new(ls, looper_ui_receiver));
+                Ok(LooperStreamBuild::new(ls, looper_ui_receiver))
             }
         }
     }

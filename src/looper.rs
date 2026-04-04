@@ -66,7 +66,7 @@ impl<'a> LooperBuilder<'a> {
         let handler: Box<dyn ChatHandler> = match self.handler_type {
             Handlers::Anthropic(m) => {
                 let mut handler = AnthropicNonStreamingHandler::new(
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -82,7 +82,7 @@ impl<'a> LooperBuilder<'a> {
             }
             Handlers::OpenAICompletions(m) => {
                 let mut handler = OpenAINonStreamingChatHandler::new(
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -98,7 +98,7 @@ impl<'a> LooperBuilder<'a> {
             }
             Handlers::OpenAIResponses(m) => {
                 let mut handler = OpenAIResponsesNonStreamingHandler::new(
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 
@@ -114,7 +114,7 @@ impl<'a> LooperBuilder<'a> {
             }
             Handlers::Gemini(m) => {
                 let mut handler = GeminiNonStreamingHandler::new(
-                    &m,
+                    m,
                     &get_system_message(self.instructions.as_deref(), sub_agent_enabled)?,
                 )?;
 

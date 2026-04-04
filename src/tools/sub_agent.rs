@@ -43,7 +43,7 @@ impl LooperTool for SubAgentTool {
             return json!({ "error": "Missing 'task_description' argument" });
         };
 
-        let result = match self.looper.send(&task_description).await {
+        let result = match self.looper.send(task_description).await {
             Ok(r) => r,
             Err(e) => return json!({ "error": format!("An error occured when sending message | Error: {}", e) })
         };

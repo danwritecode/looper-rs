@@ -133,12 +133,10 @@ impl AnthropicHandler {
                             }
 
                             // Parse accumulated tool input JSON if present
-                            if let Some(raw_input) = tool_input_bufs.remove(&index) {
-                                if let Some(MessageContent::ToolUse(t)) = content_blocks.get_mut(&index) {
-                                    if !raw_input.is_empty() {
-                                        t.input = serde_json::from_str(&raw_input)?;
-                                    }
-                                }
+                            if let Some(raw_input) = tool_input_bufs.remove(&index)
+                                && let Some(MessageContent::ToolUse(t)) = content_blocks.get_mut(&index)
+                                && !raw_input.is_empty() {
+                                    t.input = serde_json::from_str(&raw_input)?;
                             }
                         },
                         _ => ()
@@ -159,10 +157,9 @@ impl AnthropicHandler {
         for index in &sorted_indices {
             if let Some(mut block) = content_blocks.remove(index) {
                 // Inject signature into thinking blocks
-                if let MessageContent::Thinking(ref mut t) = block {
-                    if let Some(sig) = signatures.remove(index) {
+                if let MessageContent::Thinking(ref mut t) = block
+                    && let Some(sig) = signatures.remove(index) {
                         t.signature = Some(sig);
-                    }
                 }
 
                 // Collect tool call requests
